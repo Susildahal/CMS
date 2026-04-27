@@ -1,0 +1,30 @@
+[
+  {
+    "id": "1",
+    "question": "What services do you offer?",
+    "answer": "We offer custom software development, cloud solutions, cybersecurity, IT consulting, UI/UX design, and data analytics services.",
+    "category": "General",
+    "order": 1
+  },
+  {
+    "id": "2",
+    "question": "How long does a typical project take?",
+    "answer": "Project timelines vary based on complexity. Simple websites take 4-6 weeks, while enterprise applications may take 6-12 months.",
+    "category": "Projects",
+    "order": 2
+  },
+  {
+    "id": "3",
+    "question": "Do you offer post-launch support?",
+    "answer": "Yes, we offer comprehensive support packages including bug fixes, performance monitoring, and feature enhancements.",
+    "category": "Support",
+    "order": 3
+  },
+  {
+    "id": "4",
+    "question": "What technologies do you specialize in?",
+    "answer": "We specialize in React, Next.js, Node.js, Python, AWS, Azure, Docker, Kubernetes, and many more modern technologies.",
+    "category": "Technical",
+    "order": 4
+  }
+]
