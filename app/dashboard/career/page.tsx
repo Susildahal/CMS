@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -139,14 +138,24 @@ export default function CareerPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Type *</Label>
-                <Select value={typeVal} onValueChange={(v: Job["type"]) => { setTypeVal(v); setValue("type", v); }}>
+                <Select value={typeVal} onValueChange={(v) => {
+                  if (v == null) return;
+                  const val = v as Job["type"];
+                  setTypeVal(val);
+                  setValue("type", val);
+                }}>
                   <SelectTrigger id="job-type"><SelectValue /></SelectTrigger>
                   <SelectContent>{JOB_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Status *</Label>
-                <Select value={statusVal} onValueChange={(v: "open" | "closed") => { setStatusVal(v); setValue("status", v); }}>
+                <Select value={statusVal} onValueChange={(v) => {
+                  if (v == null) return;
+                  const val = v as "open" | "closed";
+                  setStatusVal(val);
+                  setValue("status", val);
+                }}>
                   <SelectTrigger id="job-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="open">Open</SelectItem>

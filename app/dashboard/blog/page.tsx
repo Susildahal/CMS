@@ -169,7 +169,11 @@ export default function BlogPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Status *</Label>
-                <Select value={statusVal} onValueChange={(v: BlogPost["status"]) => { setStatusVal(v); setValue("status", v); }}>
+                <Select value={statusVal} onValueChange={(value: BlogPost["status"] | null) => {
+                  const v = value ?? "draft";
+                  setStatusVal(v);
+                  setValue("status", v);
+                }}>
                   <SelectTrigger id="blog-status"><SelectValue /></SelectTrigger>
                   <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
                 </Select>

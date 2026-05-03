@@ -23,13 +23,26 @@ import {
   Eye,
   ChevronRight,
 } from "lucide-react";
+import type { ComponentType } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SidebarProps {
   open: boolean;
 }
 
-const navGroups = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: ComponentType<any>;
+  exact?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
     label: "Overview",
     items: [

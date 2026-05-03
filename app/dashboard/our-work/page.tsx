@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ const schema = z.object({
   year: z.coerce.number().min(2000).max(2099),
 });
 type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
 
 const CATEGORIES = ["Web App", "Mobile App", "E-Commerce", "Enterprise", "Cloud", "AI/ML", "Design"];
 
@@ -38,14 +39,14 @@ export default function OurWorkPage() {
   const [items, setItems] = useState<Project[]>(INITIAL);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
-  const [catValue, setCatValue] = useState("");
+  const [catValue, setCatValue] = useState<string>("");
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormInput, unknown, FormData>({ resolver: zodResolver(schema) });
 
   const openNew = () => { setEditing(null); reset({ title: "", client: "", description: "", imageUrl: "", category: "", year: 2024 }); setCatValue(""); setOpen(true); };
   const openEdit = (p: Project) => { setEditing(p); reset({ ...p }); setCatValue(p.category); setOpen(true); };
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit: SubmitHandler<FormData> = async (data) => {
     await new Promise((r) => setTimeout(r, 600));
     if (editing) {
       setItems(prev => prev.map(p => p.id === editing.id ? { ...p, ...data } : p));
@@ -121,7 +122,7 @@ export default function OurWorkPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Category *</Label>
-                <Select value={catValue} onValueChange={(v) => { setCatValue(v); setValue("category", v); }}>
+                <Select value={catValue} onValueChange={(v: string | null) => { const val = v ?? ""; setCatValue(val); setValue("category", val); }}>
                   <SelectTrigger id="proj-category"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>

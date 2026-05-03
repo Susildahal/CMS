@@ -224,14 +224,14 @@ export default function UsersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Role *</Label>
-                <Select value={roleVal} onValueChange={(v: UserRole) => { setRoleVal(v); setValue("role", v); }}>
+                <Select value={roleVal} onValueChange={(v) => { if (v) { setRoleVal(v as UserRole); setValue("role", v as UserRole); } }}>
                   <SelectTrigger id="user-role"><SelectValue /></SelectTrigger>
                   <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Status *</Label>
-                <Select value={statusVal} onValueChange={(v: User["status"]) => { setStatusVal(v); setValue("status", v); }}>
+                <Select value={statusVal} onValueChange={(v) => { if (v) { setStatusVal(v as User["status"]); setValue("status", v as User["status"]); } }}>
                   <SelectTrigger id="user-status"><SelectValue /></SelectTrigger>
                   <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
                 </Select>

@@ -133,13 +133,13 @@ export default function DashboardHeader({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem >
               <Link href="/dashboard/profile" className="cursor-pointer" id="profile-link">
                 <User className="mr-2 h-4 w-4" />
                 Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem >
               <Link href="/dashboard/settings" className="cursor-pointer" id="settings-link">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings

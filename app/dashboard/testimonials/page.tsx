@@ -23,6 +23,7 @@ const schema = z.object({
   imageUrl: z.string().url("Must be valid URL").or(z.literal("")),
 });
 type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
 
 const INITIAL: Testimonial[] = [
   { id: "1", name: "Jennifer Lee", title: "CTO", company: "TechNova Inc.", content: "Outstanding service! They delivered our platform 2 weeks ahead of schedule with zero defects. Highly recommend!", rating: 5, imageUrl: "" },
@@ -57,7 +58,7 @@ export default function TestimonialsPage() {
   const [editing, setEditing] = useState<Testimonial | null>(null);
   const [rating, setRating] = useState(5);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormInput, undefined, FormData>({ resolver: zodResolver(schema) });
 
   const openNew = () => { setEditing(null); setRating(5); reset({ name: "", title: "", company: "", content: "", rating: 5, imageUrl: "" }); setOpen(true); };
   const openEdit = (t: Testimonial) => { setEditing(t); setRating(t.rating); reset({ ...t }); setOpen(true); };

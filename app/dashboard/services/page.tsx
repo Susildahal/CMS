@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ const schema = z.object({
   order: z.coerce.number().min(1),
 });
 type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
 
 const INITIAL: Service[] = [
   { id: "1", title: "Custom Software Development", description: "Tailor-made software solutions built for your unique business needs.", icon: "💻", order: 1 },
@@ -37,12 +38,9 @@ export default function ServicesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormInput, undefined, FormData>({ resolver: zodResolver(schema) });
 
-  const openNew = () => { setEditing(null); reset({ title: "", description: "", icon: "⚙️", order: items.length + 1 }); setOpen(true); };
-  const openEdit = (s: Service) => { setEditing(s); reset({ title: s.title, description: s.description, icon: s.icon, order: s.order }); setOpen(true); };
-
-  const onSubmit = async (data: FormData) => {
+  const onSubmit: SubmitHandler<FormData> = async (data) => {
     await new Promise((r) => setTimeout(r, 600));
     if (editing) {
       setItems((prev) => prev.map((s) => s.id === editing.id ? { ...s, ...data } : s));
@@ -53,6 +51,11 @@ export default function ServicesPage() {
     }
     setOpen(false);
   };
+
+  const submit = handleSubmit(onSubmit);
+
+  const openNew = () => { setEditing(null); reset({ title: "", description: "", icon: "⚙️", order: items.length + 1 }); setOpen(true); };
+  const openEdit = (s: Service) => { setEditing(s); reset({ title: s.title, description: s.description, icon: s.icon, order: s.order }); setOpen(true); };
 
   return (
     <div className="space-y-6">
@@ -90,7 +93,7 @@ export default function ServicesPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{editing ? "Edit Service" : "Add Service"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" id="service-form">
+          <form onSubmit={submit} className="space-y-4" id="service-form">
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-2">
                 <Label htmlFor="svc-title">Service Title *</Label>

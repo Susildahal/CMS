@@ -21,6 +21,7 @@ const schema = z.object({
   order: z.coerce.number().min(1),
 });
 type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
 
 const INITIAL: SocialLink[] = [
   { id: "1", platform: "Facebook", url: "https://facebook.com/itcompany", icon: "📘", order: 1 },
@@ -36,7 +37,7 @@ export default function SocialPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SocialLink | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormInput, undefined, FormData>({ resolver: zodResolver(schema) });
 
   const openNew = () => { setEditing(null); reset({ platform: "", url: "", icon: "🔗", order: items.length + 1 }); setOpen(true); };
   const openEdit = (s: SocialLink) => { setEditing(s); reset({ platform: s.platform, url: s.url, icon: s.icon, order: s.order }); setOpen(true); };
