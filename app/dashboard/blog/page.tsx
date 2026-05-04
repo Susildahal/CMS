@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BookOpen, Plus, Pencil, Trash2, Loader2, Calendar, User } from "lucide-react";
 import type { BlogPost } from "@/lib/types";
-
+import Editor from "@/components/editor";
 const STATUS_OPTIONS = ["draft", "published", "archived"] as const;
 
 const schema = z.object({
@@ -47,6 +47,7 @@ export default function BlogPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<BlogPost | null>(null);
   const [statusVal, setStatusVal] = useState<BlogPost["status"]>("draft");
+  const [content, setContent] = useState("");
 
   const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -159,7 +160,7 @@ export default function BlogPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="blog-content">Content *</Label>
-              <Textarea id="blog-content" {...register("content")} rows={5} placeholder="Full article content..." />
+              <Editor value={content} onChange={setContent} placeholder="Full article content..." />
               {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">

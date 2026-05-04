@@ -8,59 +8,51 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent} from "@/components/ui/card";
 import { ShieldCheck, Save, Loader2, Clock } from "lucide-react";
 import Editor from "@/components/editor";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 const schema = z.object({
   content: z.string().min(100, "Privacy Policy must be at least 100 characters"),
 });
 type FormData = z.infer<typeof schema>;
 
-const DEFAULT = `PRIVACY POLICY
 
-Last updated: November 20, 2024
-
-1. INFORMATION WE COLLECT
-We collect information you directly provide to us, such as when you fill out a contact form, request a demo, or communicate with us via email. This may include your name, email address, phone number, and company details.
-
-2. HOW WE USE YOUR INFORMATION
-We use the information we collect to:
-- Respond to your inquiries and provide customer support
-- Send you technical notices, updates, and administrative messages
-- Improve our services and website functionality
-- Comply with legal obligations
-
-3. INFORMATION SHARING
-We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties except as described in this policy. We may share information with trusted third parties who assist us in operating our website, conducting our business, or serving you.
-
-4. DATA SECURITY
-We implement a variety of security measures to maintain the safety of your personal information. Your personal information is contained behind secured networks and is only accessible by a limited number of persons who have special access rights.
-
-5. COOKIES
-We use cookies to understand and save your preferences for future visits and compile aggregate data about site traffic and site interaction.
-
-6. THIRD-PARTY LINKS
-Occasionally, at our discretion, we may include or offer third-party products or services on our website. These third-party sites have separate and independent privacy policies.
-
-7. YOUR RIGHTS
-You have the right to access, correct, or delete any personal data we hold about you. To exercise these rights, contact us at privacy@itcompany.com.
-
-8. CHANGES TO THIS POLICY
-We reserve the right to update this privacy policy at any time. Changes will be posted on this page with an updated revision date.
-
-9. CONTACT US
-If you have questions about this Privacy Policy, contact us at: privacy@itcompany.com`;
-
-export default function PrivacyPage() {
-  const [content, setContent] = useState(DEFAULT);
-  const { register, handleSubmit, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
+export default function Page() {
+  const [content, setContent] = useState<string>("");
+  const [loadedContent, setLoadedContent] = useState<string>("");
+  const { handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { content: DEFAULT },
+    defaultValues: { content: "" },
   });
 
+  const isDirty = content !== loadedContent;
+
   const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success("Privacy Policy saved!");
+    try {
+      await axios.patch("/api/settings", { privacy: content });
+      setLoadedContent(content);
+      toast.success("Privacy Policy saved!");
+    } catch (error) {
+      console.error("Error saving privacy policy:", error);
+      toast.error("Failed to save privacy policy");
+    }
   };
+
+  const privacydata = async()=>{
+    try {
+      const response = await axios.get("/api/settings");
+      const privacy = response.data?.data?.privacy ?? "";
+      setContent(privacy);
+      setLoadedContent(privacy);
+    } catch (error) {
+      console.error("Error fetching privacy policy:", error);
+    }
+
+  }
+
+  useEffect(() => {
+    privacydata();
+  }, []);
 
   return (
     <div className="space-y-6 max-w-4xl">

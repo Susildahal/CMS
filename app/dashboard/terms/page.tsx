@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Save, Loader2, Clock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Editor from "@/components/editor";
+import axios from "axios";
 const schema = z.object({
   content: z.string().min(100, "Terms & Conditions must be at least 100 characters"),
 });
@@ -44,15 +45,41 @@ If you have any questions about these Terms, please contact us at legal@itcompan
 
 export default function TermsPage() {
   const [content, setContent] = useState(DEFAULT);
-  const { register, handleSubmit, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
+  const [loadedContent, setLoadedContent] = useState(DEFAULT);
+  const { handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { content: DEFAULT },
   });
 
+  const isDirty = content !== loadedContent;
+
   const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success("Terms & Conditions saved!");
+    try {
+      await axios.patch("/api/settings", { terms: content });
+      setLoadedContent(content);
+      toast.success("Terms & Conditions saved!");
+    } catch (error) {
+      console.error("Error saving terms:", error);
+      toast.error("Failed to save terms");
+    }
   };
+
+  useEffect(() => {
+    const fetchTerms = async () => {
+      try {
+        const response = await axios.get("/api/settings");
+        const terms = response.data?.data?.terms;
+        if (typeof terms === "string" && terms.length > 0) {
+          setContent(terms);
+          setLoadedContent(terms);
+        }
+      } catch (error) {
+        console.error("Error fetching terms:", error);
+      }
+    };
+
+    fetchTerms();
+  }, []);
 
   return (
     <div className="space-y-6 max-w-4xl">
