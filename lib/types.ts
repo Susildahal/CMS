@@ -48,6 +48,14 @@ export interface Project {
   year: number;
 }
 
+export interface PhotoAsset {
+  id: string;
+  imageType: "Hero" | "Banner" | "Gallery" | "About" | "Team";
+  description: string;
+  imageUrl: string;
+  uploadedAt: string;
+}
+
 export interface Job {
   id: string;
   title: string;

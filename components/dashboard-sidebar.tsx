@@ -89,6 +89,12 @@ const navGroups: NavGroup[] = [
       { href: "/dashboard/users", label: "User Management", icon: Users },
     ],
   },
+    {
+    label: "Photo",
+    items: [
+      { href: "/dashboard/photos", label: "Photo Management", icon: Users },
+    ],
+  },
 ];
 
 export default function DashboardSidebar({ open }: SidebarProps) {

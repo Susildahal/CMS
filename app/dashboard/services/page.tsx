@@ -33,7 +33,7 @@ const INITIAL: Service[] = [
   { id: "6", title: "Data Analytics", description: "Turn raw data into actionable business intelligence and insights.", icon: "📈", order: 6 },
 ];
 
-export default function ServicesPage() {
+export default function Page() {
   const [items, setItems] = useState<Service[]>(INITIAL);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
