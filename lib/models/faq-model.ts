@@ -13,6 +13,7 @@ function mapDocToFaq(
     answer: doc.answer,
     category: doc.category,
     order: doc.order,
+    documentId: doc._id.toString(),
   };
 }
 

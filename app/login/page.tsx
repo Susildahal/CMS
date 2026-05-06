@@ -92,7 +92,9 @@ export default function LoginPage() {
           <Card className="border-border shadow-xl">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
-              <CardDescription>Enter your credentials to access the admin dashboard</CardDescription>
+              <CardDescription>
+                Sign in with your local Strapi admin account to access the dashboard
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" id="login-form">
@@ -169,11 +171,11 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs font-semibold text-muted-foreground mb-2">Demo credentials:</p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p>🔑 <strong>Admin:</strong> admin@company.com / Admin@123</p>
-                  <p>✏️ <strong>Editor:</strong> editor@company.com / Editor@123</p>
-                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  This form connects to your Strapi server at <strong>http://localhost:1337</strong>.
+                  Update <code className="px-1 py-0.5 rounded bg-background">.env.local</code> if your local
+                  Strapi URL or login path changes.
+                </p>
               </div>
             </CardContent>
           </Card>

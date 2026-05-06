@@ -74,6 +74,7 @@ export interface Faq {
   answer: string;
   category: string;
   order: number;
+  documentId:string
 }
 
 export interface Testimonial {

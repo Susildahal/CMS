@@ -2,6 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import type { User } from "./types";
+import {
+  extractErrorMessage,
+  loginToStrapi,
+  mapStrapiUserToCmsUser,
+} from "./api";
 
 interface AuthContextType {
   user: User | null;
@@ -13,61 +18,55 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demo
-const MOCK_USERS: (User & { password: string })[] = [
-  {
-    id: "1",
-    name: "Admin User",
-    email: "admin@company.com",
-    password: "Admin@123",
-    role: "admin",
-    avatar: "",
-    createdAt: "2024-01-01",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Editor User",
-    email: "editor@company.com",
-    password: "Editor@123",
-    role: "editor",
-    avatar: "",
-    createdAt: "2024-03-15",
-    status: "active",
-  },
-];
+const AUTH_STORAGE_KEY = "cms_auth";
+
+type AuthSession = {
+  user: User;
+  token: string;
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("cms_user");
-    if (stored) {
+    const storedSession = localStorage.getItem(AUTH_STORAGE_KEY);
+
+    if (storedSession) {
       try {
-        setUser(JSON.parse(stored));
+        const parsed = JSON.parse(storedSession) as Partial<AuthSession>;
+        if (parsed.user && parsed.token) {
+          setUser(parsed.user);
+        } else {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
       } catch {
-        localStorage.removeItem("cms_user");
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
+
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
-    await new Promise((r) => setTimeout(r, 800)); // simulate API
-    const found = MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-    if (!found) return { success: false, error: "Invalid email or password" };
-    const { password: _pw, ...userObj } = found;
-    setUser(userObj);
-    localStorage.setItem("cms_user", JSON.stringify(userObj));
-    return { success: true };
+    try {
+      const { token, user: strapiUser } = await loginToStrapi(email, password);
+      const userObj = mapStrapiUserToCmsUser(strapiUser, email);
+
+      setUser(userObj);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: userObj, token } satisfies AuthSession));
+      localStorage.setItem("cms_token", token);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: extractErrorMessage(error, "Invalid Strapi credentials") };
+    }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("cms_user");
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem("cms_token");
   };
 
   return (
