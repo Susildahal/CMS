@@ -20,6 +20,7 @@ export interface TeamMember {
   imageUrl: string;
   linkedIn?: string;
   order: number;
+  documentId:string
 }
 
 export interface Activity {

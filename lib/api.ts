@@ -20,6 +20,11 @@ apiClient.interceptors.request.use((config) => {
     }
   }
 
+  // ✅ Remove Content-Type for FormData so axios sets multipart boundary automatically
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 
@@ -86,7 +91,6 @@ export function extractErrorMessage(error: unknown, fallback = "Request failed")
 
 function normalizeRole(roleName?: string): UserRole {
   const value = roleName?.toLowerCase() ?? "";
-
   if (value.includes("editor")) return "editor";
   if (value.includes("viewer")) return "viewer";
   return "admin";

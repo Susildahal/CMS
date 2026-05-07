@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Plus, Pencil, Trash2, Loader2} from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import type { TeamMember } from "@/lib/types";
+import ImageUploader from "@/components/imageuploader";
+import { apiClient } from "@/lib/api";
 
 const schema = z.object({
   name: z.string().min(2, "Name required"),
@@ -23,47 +25,122 @@ const schema = z.object({
   linkedIn: z.string().url("Enter a valid LinkedIn URL").or(z.literal("")),
   order: z.coerce.number().min(1),
 });
+
 type FormData = z.infer<typeof schema>;
 
-const INITIAL: TeamMember[] = [
-  { id: "1", name: "James Carter", role: "CEO & Founder", bio: "Visionary leader with 20+ years in IT industry.", imageUrl: "", linkedIn: "", order: 1 },
-  { id: "2", name: "Sarah Johnson", role: "Lead Designer", bio: "UX expert crafting intuitive digital experiences.", imageUrl: "", linkedIn: "", order: 2 },
-  { id: "3", name: "Mike Chen", role: "Head of Engineering", bio: "Full-stack architect specializing in scalable systems.", imageUrl: "", linkedIn: "", order: 3 },
-];
-
 export default function TeamPage() {
-  const [members, setMembers] = useState<TeamMember[]>(INITIAL);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
-    const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<z.input<typeof schema>, any, FormData>({
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { order: members.length + 1 },
+    defaultValues: { order: 1, imageUrl: "" },
   });
 
-  const openNew = () => { setEditing(null); reset({ order: members.length + 1 }); setOpen(true); };
-  const openEdit = (m: TeamMember) => {
-    setEditing(m);
-    reset({ name: m.name, role: m.role, bio: m.bio, imageUrl: m.imageUrl || "", linkedIn: m.linkedIn || "", order: m.order });
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get("http://localhost:1337/api/teams?sort=order&populate=imageUrl");
+      setMembers(response.data?.data || response.data);
+    } catch (error) {
+      toast.error("Failed to load team members");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  const openNew = () => {
+    setEditing(null);
+    setImageFile(null);
+    reset({ order: members.length + 1, imageUrl: "", name: "", role: "", bio: "", linkedIn: "" });
     setOpen(true);
   };
 
-  const onSubmit = async (data: FormData) => {
-    await new Promise((r) => setTimeout(r, 600));
-    if (editing) {
-      setMembers((prev) => prev.map((m) => (m.id === editing.id ? { ...m, ...data } : m)));
-      toast.success("Team member updated!");
-    } else {
-      const newMember: TeamMember = { id: Date.now().toString(), ...data };
-      setMembers((prev) => [...prev, newMember]);
-      toast.success("Team member added!");
-    }
-    setOpen(false);
+  const openEdit = (m: TeamMember) => {
+    setEditing(m);
+    setImageFile(null);
+    reset({
+      name: m.name,
+      role: m.role,
+      bio: m.bio,
+      imageUrl: m.imageUrl || "",
+      linkedIn: m.linkedIn || "",
+      order: m.order,
+    });
+    setOpen(true);
   };
 
-  const deleteMember = (id: string) => {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-    toast.success("Member removed.");
+const onSubmit = async (values: FormData) => {
+  try {
+    const strapiAttributes = {
+      name: values.name,
+      role: values.role,
+      bio: values.bio,
+      linkedIn: values.linkedIn || "",
+      order: Number(values.order),
+    };
+
+    const endpoint = editing
+      ? `api/teams/${editing.documentId}`
+      : "api/teams";
+
+    const method = editing ? "PUT" : "POST";
+
+    if (imageFile) {
+      const formData = new globalThis.FormData();
+      
+      // ✅ FIX: Ensure the data is stringified correctly at the root
+      formData.append("data", JSON.stringify(strapiAttributes));
+      
+      // ✅ FIX: Ensure the field name 'imageUrl' matches exactly what is in Strapi
+      formData.append("files.imageUrl", imageFile);
+
+      await apiClient({
+        method: method,
+        url: endpoint,
+        data: formData,
+        // Let axios handle headers automatically
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    } else {
+      // Plain JSON update
+      await apiClient({
+        method: method,
+        url: endpoint,
+        data: { data: strapiAttributes },
+      });
+    }
+
+    toast.success("Team member saved!");
+    setOpen(false);
+    setImageFile(null); // Reset the local file state
+    fetchMembers();
+  } catch (error: any) {
+    console.error("Strapi Error:", error.response?.data || error);
+    toast.error(error.response?.data?.error?.message || "Failed to save");
+  }
+};
+
+  const deleteMember = async (documentId: string) => {
+    if (!confirm("Are you sure you want to delete this member?")) return;
+    try {
+      // ✅ Use documentId for Strapi v5 delete
+      await apiClient.delete(`api/teams/${documentId}`);
+      setMembers((prev) => prev.filter((m) => m.documentId !== documentId));
+      toast.success("Member removed.");
+    } catch (error) {
+      toast.error("Failed to delete member");
+    }
   };
 
   return (
@@ -71,59 +148,68 @@ export default function TeamPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" style={{ color: "#006caf" }} /> Our Team
+            <Users className="h-6 w-6 text-[#006caf]" /> Our Team
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage team members displayed on the website.</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Manage team members displayed on the website.
+          </p>
         </div>
         <Button
-          id="add-team-member-btn"
           onClick={openNew}
-          className="text-white"
-          style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}
+          className="text-white bg-gradient-to-br from-[#006caf] to-[#005a94]"
         >
           <Plus className="h-4 w-4 mr-1" /> Add Member
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {members.sort((a, b) => a.order - b.order).map((m) => (
-          <Card key={m.id} className="border-border hover:shadow-md transition-all group">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
-                    style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}
-                  >
-                    {m.name.charAt(0)}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#006caf]" />
+          <p className="text-muted-foreground text-sm">Fetching team data...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {members.map((m) => (
+            <Card key={m.documentId} className="border-border hover:shadow-md transition-all group">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0 bg-gradient-to-br from-[#006caf] to-[#005a94]">
+                      {m.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.role}</p>
+                      <Badge variant="outline" className="text-[10px] mt-1">#{m.order}</Badge>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">{m.name}</p>
-                    <p className="text-xs text-muted-foreground">{m.role}</p>
-                    <Badge variant="outline" className="text-[10px] mt-1">#{m.order}</Badge>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(m)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => deleteMember(m.documentId)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(m)} id={`edit-member-${m.id}`}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteMember(m.id)} id={`delete-member-${m.id}`}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-3 leading-relaxed line-clamp-2">{m.bio}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <p className="text-xs text-muted-foreground mt-3 leading-relaxed line-clamp-2">{m.bio}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Team Member" : "Add Team Member"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" id="team-member-form">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="tm-name">Full Name *</Label>
@@ -141,11 +227,17 @@ export default function TeamPage() {
               <Textarea id="tm-bio" {...register("bio")} placeholder="Short biography..." rows={3} />
               {errors.bio && <p className="text-xs text-destructive">{errors.bio.message}</p>}
             </div>
+            <div className="space-y-1.5">
+              <Label>Image Upload</Label>
+              <ImageUploader
+                onUpload={(files) => setImageFile(files[0] || null)}
+                maxFiles={1}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="tm-img">Photo URL</Label>
-                <Input id="tm-img" {...register("imageUrl")} placeholder="https://..." />
-                {errors.imageUrl && <p className="text-xs text-destructive">{errors.imageUrl.message}</p>}
+                <Label htmlFor="tm-order">Display Order</Label>
+                <Input id="tm-order" type="number" {...register("order")} min={1} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="tm-li">LinkedIn URL</Label>
@@ -153,20 +245,18 @@ export default function TeamPage() {
                 {errors.linkedIn && <p className="text-xs text-destructive">{errors.linkedIn.message}</p>}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tm-order">Display Order</Label>
-              <Input id="tm-order" type="number" {...register("order")} min={1} />
-            </div>
             <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1" id="cancel-team-btn">Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1">
+                Cancel
+              </Button>
               <Button
                 type="submit"
-                id="save-team-member-btn"
                 disabled={isSubmitting}
-                className="flex-1 text-white"
-                style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}
+                className="flex-1 text-white bg-gradient-to-br from-[#006caf] to-[#005a94]"
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (editing ? "Update" : "Add Member")}
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : editing ? "Update" : "Add Member"}
               </Button>
             </div>
           </form>

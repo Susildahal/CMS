@@ -15,7 +15,16 @@ import { HelpCircle, Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronUp } fro
 import Editor from "@/components/editor";
 import type { Faq } from "@/lib/types";
 import { apiClient, extractErrorMessage } from "@/lib/api";
+import { StrapiDataTable } from "@/components/datatable";
 
+type ColumnDef = {
+  key: string;
+  label: string;
+  render?: (value: any, row: any) => React.ReactNode;
+  hidden?: boolean;
+};
+
+ 
 const schema = z.object({
   question: z.string().trim().min(10, "Question must be at least 10 characters"),
   category: z.string().trim().min(2, "Category must be at least 2 characters"),
@@ -26,13 +35,20 @@ type FormData = z.infer<typeof schema>;
 interface FaqClientProps {
   initialItems: Faq[];
 }
-
+  const columns: ColumnDef[] = [
+  { key: "question", label: "Question" },
+  { key: "answer", label: "Answer" },
+  { key: "order", label: "Order" },
+];
 export default function FaqClient({ initialItems }: FaqClientProps) {
   const [items, setItems] = useState<Faq[]>(initialItems ?? []);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Faq | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [editorValue, setEditorValue] = useState("");
+
+
+  const [editRow, setEditRow] = useState<any | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const {
     register,
@@ -41,30 +57,6 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-  const loadFaqs = async () => {
-    try {
-      const response = await apiClient.get("/api/faqs");
-      const faqs = Array.isArray(response.data?.data) ? response.data.data : [];
-
-      setItems(
-        faqs.map((faq: any) => ({
-          id: String(faq.id),
-          question: faq.question ?? "",
-          answer: faq.answer ?? "",
-          category: faq.category ?? "General",
-          order: Number(faq.order ?? 0),
-          documentId: String(faq.documentId ?? faq.id),
-        }))
-      );
-    } catch (error) {
-      const message = extractErrorMessage(error, "Failed to load FAQs");
-      toast.error(message);
-    }
-  };
-
-  useEffect(() => {
-    loadFaqs();
-  }, []);
 
   const openNew = () => {
     setEditing(null);
@@ -118,7 +110,7 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
 
       toast.success(isEdit ? "FAQ updated!" : "FAQ added!");
       setOpen(false);
-      await loadFaqs();
+      // await loadFaqs();
     } catch (error) {
       const message = extractErrorMessage(error, "Failed to save FAQ");
       console.error("Submission error:", error);
@@ -126,32 +118,16 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
     }
   };
 
-  const handleDelete = async (documentId: string) => {
-    try {
-      await apiClient.delete(`/api/faqs/${documentId}`);
-
-      toast.success("FAQ deleted.");
-      setItems((prev) => prev.filter((faq) => faq.documentId !== documentId));
-
-      if (expanded === documentId) {
-        setExpanded(null);
-      }
-    } catch (error) {
-      const message = extractErrorMessage(error, "Failed to delete FAQ");
-      toast.error(message);
-    }
-  };
 
   const categories = [...new Set(items.map((faq) => faq.category))];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-1">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <HelpCircle className="h-6 w-6" style={{ color: "#006caf" }} /> FAQ
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage frequently asked questions. {items.length} total.</p>
         </div>
         <Button
           onClick={openNew}
@@ -170,73 +146,17 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
           </Badge>
         ))}
       </div>
-
-      <div className="space-y-2">
-        {[...items].sort((a, b) => a.order - b.order).map((faq) => (
-          <Card key={faq.documentId} className="border-border hover:shadow-sm transition-all group">
-            <CardContent className="p-0">
-              <div className="flex items-start gap-3 p-4">
-                <button
-                  className="flex-1 text-left flex items-start gap-3 min-w-0"
-                  onClick={() => setExpanded(expanded === faq.documentId ? null : faq.documentId)}
-                  id={`faq-toggle-${faq.documentId}`}
-                >
-                  <div
-                    className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: "#006caf18" }}
-                  >
-                    <span className="text-xs font-bold" style={{ color: "#006caf" }}>
-                      Q
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{faq.question}</p>
-                      <Badge variant="outline" className="text-[10px] shrink-0">
-                        {faq.category}
-                      </Badge>
-                    </div>
-                    {expanded === faq.documentId && (
-                      <div className="mt-3 flex gap-2.5">
-                        <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: "#f9bb1918" }}>
-                          <span className="text-xs font-bold" style={{ color: "#e0a810" }}>
-                            A
-                          </span>
-                        </div>
-                        <div
-                          className="text-sm text-muted-foreground leading-relaxed [&_strong]:font-semibold [&_em]:italic [&_u]:underline [&_ol]:list-decimal [&_ol]:ml-4 [&_ul]:list-disc [&_ul]:ml-4 [&_li]:mb-1 [&_blockquote]:border-l-4 [&_blockquote]:border-muted [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold"
-                          dangerouslySetInnerHTML={{ __html: faq.answer }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </button>
-                <div className="flex items-center gap-1 shrink-0">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(faq)} id={`edit-faq-${faq.documentId}`}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => void handleDelete(faq.documentId)}
-                      id={`delete-faq-${faq.documentId}`}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  {expanded === faq.documentId ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            <StrapiDataTable
+        title="FAQs"
+        addLabel="Add FAQ"
+        endpoint="api/faqs"
+        deleteEndpoint="api/faqs"
+        columns={columns}
+        pageSize={10}
+        sortField="order:asc"
+        onAdd={() => setAddOpen(true)}
+        onEdit={(row: any) => setEditRow(row)}  // ✅ row has documentId for your update form
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">

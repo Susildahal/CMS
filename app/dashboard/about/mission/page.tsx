@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, Eye, Loader2, Save } from "lucide-react";
 import Editor from "@/components/editor";
+import { apiClient } from "@/lib/api";
+import { useState, useEffect } from "react";
 
 const schema = z.object({
   mission: z.string().min(20, "Mission must be at least 20 characters"),
@@ -19,43 +21,120 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+const DEFAULTS: FormData = {
+  mission: "",
+  vision:
+    "To be the most trusted IT partner for enterprises globally, recognized for our commitment to excellence, innovation, and sustainable technology practices.",
+  values: "Integrity · Innovation · Excellence · Collaboration · Customer-first",
+  aboutUs:
+    "Founded in 2010, we are a leading IT services company specializing in custom software development, cloud solutions, and digital transformation. With a team of 150+ experts, we serve clients across 20+ countries.",
+};
+
 export default function MissionPage() {
-  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const [isLoading, setIsLoading] = useState(true);
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      mission: "To empower businesses through innovative IT solutions that drive growth, efficiency, and digital transformation in a rapidly evolving technological landscape.",
-      vision: "To be the most trusted IT partner for enterprises globally, recognized for our commitment to excellence, innovation, and sustainable technology practices.",
-      values: "Integrity · Innovation · Excellence · Collaboration · Customer-first",
-      aboutUs: "Founded in 2010, we are a leading IT services company specializing in custom software development, cloud solutions, and digital transformation. With a team of 150+ experts, we serve clients across 20+ countries.",
-    },
+    defaultValues: DEFAULTS,
   });
 
-  const onSubmit = async (data: FormData) => {
-    await new Promise((r) => setTimeout(r, 800));
+  // ── GET ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await apiClient.get("api/site-name");
+        const fetched = response.data?.data;
+        if (fetched) {
+          reset({
+            mission: fetched.mission ?? DEFAULTS.mission,
+            vision: fetched.vision ?? DEFAULTS.vision,
+            values: fetched.values ?? DEFAULTS.values,
+            aboutUs: fetched.aboutus ?? DEFAULTS.aboutUs,
+          });
+        }
+      } catch {
+        toast.error("Failed to load data.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [reset]);
+
+  // ── PUT ──────────────────────────────────────────────────────────────
+// ── PUT ──────────────────────────────────────────────────────────────
+const onSubmit = async (formData: FormData) => {
+  try {
+    await apiClient.put("api/site-name", {
+      data: {
+        mission: formData.mission,
+        vision: formData.vision,
+        values: formData.values,
+        aboutus: formData.aboutUs, // map camelCase → lowercase
+      },
+    });
     toast.success("Mission & Vision saved successfully!");
-  };
+  } catch {
+    toast.error("Failed to save. Please try again."); 
+  }
+};
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Target className="h-6 w-6" style={{ color: "#006caf" }} /> Mission & Vision
+          <Target className="h-6 w-6" style={{ color: "#006caf" }} /> Mission &
+          Vision
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">Edit your company's core purpose and strategic goals.</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          Edit your company's core purpose and strategic goals.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" id="mission-vision-form">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="space-y-6"
+        id="mission-vision-form"
+      >
         <Tabs defaultValue="mission">
           <TabsList className="mb-4">
-            <TabsTrigger value="mission" id="mission-tab">Mission</TabsTrigger>
-            <TabsTrigger value="vision" id="vision-tab">Vision</TabsTrigger>
-            <TabsTrigger value="values" id="values-tab">Values</TabsTrigger>
-            <TabsTrigger value="about" id="about-tab">About Us</TabsTrigger>
+            <TabsTrigger value="mission" id="mission-tab">
+              Mission
+            </TabsTrigger>
+            <TabsTrigger value="vision" id="vision-tab">
+              Vision
+            </TabsTrigger>
+            <TabsTrigger value="values" id="values-tab">
+              Values
+            </TabsTrigger>
+            <TabsTrigger value="about" id="about-tab">
+              About Us
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="mission">
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Target className="h-4 w-4" style={{color:"#006caf"}} /> Our Mission</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="h-4 w-4" style={{ color: "#006caf" }} />{" "}
+                  Our Mission
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <Label>Mission Statement</Label>
                 <Controller
@@ -69,15 +148,26 @@ export default function MissionPage() {
                     />
                   )}
                 />
-                {errors.mission && <p className="text-xs text-destructive">{errors.mission.message}</p>}
-                <p className="text-xs text-muted-foreground">This appears on the About page hero section.</p>
+                {errors.mission && (
+                  <p className="text-xs text-destructive">
+                    {errors.mission.message}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  This appears on the About page hero section.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="vision">
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" style={{color:"#f9bb19"}} /> Our Vision</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Eye className="h-4 w-4" style={{ color: "#f9bb19" }} /> Our
+                  Vision
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <Label>Vision Statement</Label>
                 <Controller
@@ -91,14 +181,20 @@ export default function MissionPage() {
                     />
                   )}
                 />
-                {errors.vision && <p className="text-xs text-destructive">{errors.vision.message}</p>}
+                {errors.vision && (
+                  <p className="text-xs text-destructive">
+                    {errors.vision.message}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="values">
             <Card>
-              <CardHeader><CardTitle className="text-base">Core Values</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Core Values</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <Label>Values (separate with · or new lines)</Label>
                 <Controller
@@ -112,14 +208,20 @@ export default function MissionPage() {
                     />
                   )}
                 />
-                {errors.values && <p className="text-xs text-destructive">{errors.values.message}</p>}
+                {errors.values && (
+                  <p className="text-xs text-destructive">
+                    {errors.values.message}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="about">
             <Card>
-              <CardHeader><CardTitle className="text-base">About Us</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">About Us</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <Label>Company Description</Label>
                 <Controller
@@ -133,7 +235,11 @@ export default function MissionPage() {
                     />
                   )}
                 />
-                {errors.aboutUs && <p className="text-xs text-destructive">{errors.aboutUs.message}</p>}
+                {errors.aboutUs && (
+                  <p className="text-xs text-destructive">
+                    {errors.aboutUs.message}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -146,7 +252,17 @@ export default function MissionPage() {
           className="text-white px-8"
           style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}
         >
-          {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Changes</>}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </>
+          )}
         </Button>
       </form>
     </div>
