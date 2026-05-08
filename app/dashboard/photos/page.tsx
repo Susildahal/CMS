@@ -49,6 +49,13 @@ interface ExtendedPhotoAsset extends PhotoAsset {
   uploadFileIds?: number[];
 }
 
+interface StrapiPaginationMeta {
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  total: number;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -134,6 +141,16 @@ export default function Page() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const cancelUploadRef = useRef<(() => void) | null>(null);
 
+  // Pagination (Strapi-style)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [pagination, setPagination] = useState<StrapiPaginationMeta | null>(null);
+
+  // Delete confirmation dialog
+  const [deleteTarget, setDeleteTarget] = useState<ExtendedPhotoAsset | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -148,12 +165,16 @@ export default function Page() {
 
   const currentType = watch("imageType");
 
-  // ✅ 1. Fetch all photos from Strapi on mount
+  // ✅ 1. Fetch photos from Strapi with pagination
   const fetchPhotos = async () => {
     try {
       setPageLoading(true);
-      const res = await apiClient.get("api/photos?populate=*&sort=createdAt:desc");
+      const res = await apiClient.get(
+        `api/photos?populate=*&sort=createdAt:desc&pagination[page]=${page}&pagination[pageSize]=${pageSize}`
+      );
       const raw = res.data?.data ?? [];
+      const serverPagination: StrapiPaginationMeta | null =
+        res.data?.meta?.pagination ?? null;
 
       const mapped: ExtendedPhotoAsset[] = raw.map((item: any) => ({
         id: String(item.id),
@@ -169,6 +190,16 @@ export default function Page() {
       }));
 
       setPhotos(mapped);
+
+      if (serverPagination) {
+        setPagination(serverPagination);
+        // If current page is out of bounds (e.g., after deletions), snap back.
+        if (serverPagination.pageCount > 0 && page > serverPagination.pageCount) {
+          setPage(serverPagination.pageCount);
+        }
+      } else {
+        setPagination(null);
+      }
     } catch (error) {
       toast.error("Failed to load photos");
       console.error(error);
@@ -179,7 +210,7 @@ export default function Page() {
 
   useEffect(() => {
     fetchPhotos();
-  }, []);
+  }, [page, pageSize]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -254,34 +285,44 @@ export default function Page() {
     setOpen(true);
   };
 
-  // ✅ 2. Delete: first delete the uploaded media file, then delete the collection entry
-  const deletePhoto = async (photo: ExtendedPhotoAsset) => {
-    if (!confirm("Are you sure you want to delete this photo? This will delete the uploaded file too.")) return;
+  const openDeleteModal = (photo: ExtendedPhotoAsset) => {
+    setDeleteTarget(photo);
+    setDeleteOpen(true);
+  };
 
-    const fileIds = Array.isArray(photo.uploadFileIds) ? photo.uploadFileIds : [];
+  // ✅ 2. Delete: first delete the uploaded media file, then delete the collection entry
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    const fileIds = Array.isArray(deleteTarget.uploadFileIds) ? deleteTarget.uploadFileIds : [];
     try {
+      setDeleteLoading(true);
+
       // 1) Delete uploaded media file(s) first
       if (fileIds.length > 0) {
         const results = await Promise.allSettled(
           fileIds.map((id) => apiClient.delete(`api/upload/files/${id}`))
         );
-
         const failed = results.filter((r) => r.status === "rejected");
         if (failed.length > 0) {
           toast.warning(
-            `Deleted photo record, but ${failed.length} file(s) could not be deleted. Check permissions.`
+            `Some file(s) could not be deleted (${failed.length}). Check Strapi Upload permissions.`
           );
         }
       }
 
       // 2) Delete the photo collection entry
-      await apiClient.delete(`api/photos/${photo.documentId}`);
+      await apiClient.delete(`api/photos/${deleteTarget.documentId}`);
 
-      setPhotos((prev) => prev.filter((p) => p.documentId !== photo.documentId));
-      toast.success("Photo + file deleted.");
+      toast.success("Deleted successfully.");
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+      await fetchPhotos();
     } catch (error) {
       toast.error("Failed to delete photo");
       console.error(error);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -382,6 +423,8 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
 };
 
   const canAddMore = photos.length < MAX_PHOTOS;
+  const totalPages = pagination?.pageCount ?? 1;
+  const totalRecords = pagination?.total ?? photos.length;
 
   return (
     <div className="mx-auto space-y-8">
@@ -396,7 +439,7 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
             <p className="text-[10px] text-muted-foreground">
               Manage your high-resolution brand imagery.{" "}
               <span className="text-[10px] font-medium">
-                {photos.length}/{MAX_PHOTOS} photos
+                {totalRecords}/{MAX_PHOTOS} photos
               </span>
             </p>
           </div>
@@ -459,7 +502,7 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            deletePhoto(photo);
+                            openDeleteModal(photo);
                           }}
                           className="absolute top-2 right-2 h-6 w-6 rounded-full bg-red-500/80 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                         >
@@ -490,6 +533,136 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
           )}
         </>
       )}
+
+      {/* Pagination */}
+      {!pageLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Rows per page</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => {
+                setPageSize(Number(val));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-7 w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !deleteLoading) {
+            setDeleteOpen(false);
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <X className="h-5 w-5" />
+              Delete Image
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will delete the uploaded file <span className="font-medium">first</span>, then delete the photo record.
+            </p>
+
+            {deleteTarget?.imageUrl ? (
+              <div className="rounded-lg border overflow-hidden">
+                <img
+                  src={deleteTarget.imageUrl}
+                  alt={deleteTarget.description}
+                  className="w-full h-48 object-cover"
+                />
+              </div>
+            ) : null}
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>
+                <span className="font-medium text-foreground">Type:</span> {deleteTarget?.imageType ?? "—"}
+              </div>
+              <div className="line-clamp-3">
+                <span className="font-medium text-foreground">Description:</span> {deleteTarget?.description ?? "—"}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  if (!deleteLoading) {
+                    setDeleteOpen(false);
+                    setDeleteTarget(null);
+                  }
+                }}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="flex-1"
+                onClick={confirmDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Upload / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>

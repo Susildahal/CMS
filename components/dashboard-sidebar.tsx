@@ -35,6 +35,7 @@ interface NavItem {
   label: string;
   icon: ComponentType<any>;
   exact?: boolean;
+  target?: string;
 }
 
 interface NavGroup {
@@ -73,6 +74,7 @@ const navGroups: NavGroup[] = [
       { href: "/dashboard/endorsements", label: "Endorsements", icon: Award },
       { href: "/dashboard/blog", label: "Blog", icon: BookOpen },
       { href: "/dashboard/faq", label: "FAQ", icon: HelpCircle },
+       { href: "/dashboard/technology", label: "Technology", icon: HelpCircle },
     ],
   },
   {
@@ -92,7 +94,7 @@ const navGroups: NavGroup[] = [
     {
     label: "Photo",
     items: [
-      { href: "/dashboard/photos", label: "Photo Management", icon: Users },
+      { href: "/dashboard/photos", label: "Photo Management", icon: Users ,target: "_blank" },
     ],
   },
 ];
@@ -136,26 +138,28 @@ export default function DashboardSidebar({ open }: SidebarProps) {
               {group.items.map((item) => {
                 const active = isActive(item.href, item.exact);
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    id={`nav-${item.href.replace(/\//g, "-").slice(1)}`}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                      active
-                        ? "text-white shadow-sm"
-                        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                    )}
-                    style={
-                      active
-                        ? { background: "linear-gradient(90deg, #006caf, #005a94)" }
-                        : {}
-                    }
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                    {active && <ChevronRight className="ml-auto h-3 w-3 opacity-60" />}
-                  </Link>
+<Link
+  key={item.href}
+  href={item.href}
+  target={item.target}
+  rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
+  id={`nav-${item.href.replace(/\//g, "-").slice(1)}`}
+  className={cn(
+    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+    active
+      ? "text-white shadow-sm"
+      : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+  )}
+  style={
+    active
+      ? { background: "linear-gradient(90deg, #006caf, #005a94)" }
+      : {}
+  }
+>
+  <item.icon className="h-4 w-4 shrink-0" />
+  <span className="truncate">{item.label}</span>
+  {active && <ChevronRight className="ml-auto h-3 w-3 opacity-60" />}
+</Link>
                 );
               })}
             </div>
@@ -164,9 +168,6 @@ export default function DashboardSidebar({ open }: SidebarProps) {
       </ScrollArea>
 
       {/* Bottom version */}
-      <div className="px-5 py-3 border-t border-sidebar-border shrink-0">
-        <p className="text-[10px] text-sidebar-foreground/40">CMS v1.0.0 · Admin Portal</p>
-      </div>
     </aside>
   );
 }
