@@ -14,8 +14,31 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+function DropdownMenuTrigger({ children, ...props }: MenuPrimitive.Trigger.Props) {
+  // Base UI triggers render a <button> by default.
+  // If you pass a <Button> (also a <button>) as a child, you'll end up with <button><button/></button>
+  // which causes hydration errors in Next.js.
+  //
+  // Use Base UI's `render` prop to make the trigger *be* the provided child element.
+  const anyProps = props as any
+  const asChild = Boolean(anyProps.asChild)
+  if (asChild && children) {
+    // Remove non-DOM prop so it doesn't leak to the trigger/button
+    const { asChild: _asChild, ...rest } = anyProps
+    return (
+      <MenuPrimitive.Trigger
+        data-slot="dropdown-menu-trigger"
+        {...rest}
+        render={children as any}
+      />
+    )
+  }
+
+  return (
+    <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props}>
+      {children}
+    </MenuPrimitive.Trigger>
+  )
 }
 
 function DropdownMenuContent({

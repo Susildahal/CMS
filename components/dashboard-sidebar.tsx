@@ -62,6 +62,7 @@ const navGroups: NavGroup[] = [
     label: "Website Pages",
     items: [
       { href: "/dashboard/services", label: "Services", icon: Briefcase },
+      { href: "/dashboard/services/service-types", label: "Service Types", icon: Briefcase },
       { href: "/dashboard/our-work", label: "Our Work", icon: FolderOpen },
       { href: "/dashboard/career", label: "Career", icon: UserPlus },
       { href: "/dashboard/contact", label: "Contact", icon: Phone },

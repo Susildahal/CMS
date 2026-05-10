@@ -22,8 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -43,6 +47,8 @@ import {
   ChevronRight,
   Eye,
   AlertTriangle,
+  Columns3,
+  RotateCcw,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -52,7 +58,8 @@ import {
  * @property {string} key Field key from Strapi response (supports dot paths like "photo.url")
  * @property {string} label Column header label
  * @property {(value: any, row: any) => any} [render] Optional custom cell renderer
- * @property {boolean} [hidden] Hide this column
+ * @property {boolean} [hidden] Hide this column by default
+ * @property {boolean} [hideable] If false, column cannot be hidden via the UI
  */
 
 /**
@@ -91,6 +98,8 @@ export function StrapiDataTable(props) {
     pageSize = 10,
     sortField = "createdAt:desc",
   } = props;
+
+  const columnStorageKey = `cms:datatable:columns:${endpoint}`;
   /** @type {[any[], (next: any[]) => void]} */
   const [data, setData] = useState([]);
   /** @type {[StrapiMeta | null, (next: StrapiMeta | null) => void]} */
@@ -98,6 +107,40 @@ export function StrapiDataTable(props) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(pageSize);
+
+  // Column visibility (persisted per endpoint)
+  const defaultHiddenKeys = columns
+    .filter((c) => c?.hidden)
+    .map((c) => c.key);
+  const [hiddenKeys, setHiddenKeys] = useState(defaultHiddenKeys);
+
+  useEffect(() => {
+    // Load persisted visibility when endpoint/columns change
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(columnStorageKey);
+      if (!raw) {
+        setHiddenKeys(defaultHiddenKeys);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      const nextHidden = Array.isArray(parsed?.hidden) ? parsed.hidden : defaultHiddenKeys;
+      setHiddenKeys(nextHidden);
+    } catch {
+      setHiddenKeys(defaultHiddenKeys);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint, columns.length]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(columnStorageKey, JSON.stringify({ hidden: hiddenKeys }));
+    } catch {
+      // ignore
+    }
+  }, [columnStorageKey, hiddenKeys]);
 
   // Delete confirmation dialog
   /** @type {[any | null, (next: any | null) => void]} */
@@ -148,26 +191,86 @@ export function StrapiDataTable(props) {
     return key.split(".").reduce((acc, k) => acc?.[k], row);
   };
 
-  const visibleColumns = columns.filter((c) => !c.hidden);
+  const hiddenSet = new Set(hiddenKeys);
+  const visibleColumns = columns.filter((c) => !hiddenSet.has(c.key));
+  const hideableColumns = columns.filter((c) => c?.hideable !== false);
+
+  const setColumnVisible = (key, visible) => {
+    setHiddenKeys((prev) => {
+      const set = new Set(prev);
+      if (visible) set.delete(key);
+      else set.add(key);
+      return Array.from(set);
+    });
+  };
+
+  const resetColumns = () => {
+    setHiddenKeys(defaultHiddenKeys);
+    try {
+      window.localStorage.removeItem(columnStorageKey);
+    } catch {
+      // ignore
+    }
+  };
   const totalPages = meta?.pagination?.pageCount ?? 1;
   const totalRecords = meta?.pagination?.total ?? 0;
 
   return (
     <div className="space-y-2">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">
+          {totalRecords} total records
+        </span>
 
-       
-            {totalRecords} total records
-   
+        {hideableColumns.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-2">
+                <Columns3 className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Show / hide columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                {hideableColumns.map((col) => {
+                  const checked = !hiddenSet.has(col.key);
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={col.key}
+                      checked={checked}
+                      onCheckedChange={(next) => {
+                        setColumnVisible(col.key, Boolean(next));
+                      }}
+                    >
+                      {col.label}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </DropdownMenuGroup>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={resetColumns}
+                className="text-muted-foreground"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* ── Table ── */}
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
-              <TableHead className="w-12 text-xs">#</TableHead>
+              <TableHead className="hidden w-12 text-xs sm:table-cell">#</TableHead>
               {visibleColumns.map((col) => (
                 <TableHead key={col.key} className="text-xs font-semibold">
                   {col.label}
@@ -210,7 +313,7 @@ export function StrapiDataTable(props) {
                   className="hover:bg-muted/20 transition-colors"
                 >
                   {/* Row number */}
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {(page - 1) * currentPageSize + index + 1}
                   </TableCell>
 
@@ -218,7 +321,10 @@ export function StrapiDataTable(props) {
                   {visibleColumns.map((col) => {
                     const value = resolveValue(row, col.key);
                     return (
-                      <TableCell key={col.key} className="text-sm max-w-xs">
+                      <TableCell
+                        key={col.key}
+                        className="text-sm max-w-[18rem] whitespace-normal break-words"
+                      >
                         {col.render ? (
                           col.render(value, row)
                         ) : typeof value === "boolean" ? (
@@ -228,7 +334,7 @@ export function StrapiDataTable(props) {
                         ) : value === null || value === undefined ? (
                           <span className="text-muted-foreground text-xs">—</span>
                         ) : (
-                          <span className="line-clamp-2">
+                          <span className="block line-clamp-2 break-words">
                             {/* Strip HTML tags for display */}
                             {String(value).replace(/<[^>]*>/g, "")}
                           </span>

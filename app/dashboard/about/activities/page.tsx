@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Activity, Plus, Pencil, Trash2, Loader2, Calendar } from "lucide-react";
 import type { Activity as ActivityType } from "@/lib/types";
+import editor from "@/components/editor"
 
 const schema = z.object({
   title: z.string().min(2, "Title required"),
@@ -32,7 +33,7 @@ export default function ActivitiesPage() {
   const [items, setItems] = useState<ActivityType[]>(INITIAL);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
-
+const [editorContent, setEditorContent] = useState("");
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const openNew = () => { setEditing(null); reset({ title: "", description: "", date: "", imageUrl: "" }); setOpen(true); };

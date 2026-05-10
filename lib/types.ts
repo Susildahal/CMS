@@ -37,6 +37,7 @@ export interface Service {
   description: string;
   icon: string;
   order: number;
+  subtitle: string;
 }
 
 export interface Project {

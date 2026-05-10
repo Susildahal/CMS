@@ -16,7 +16,8 @@ apiClient.interceptors.request.use((config) => {
     const token = window.localStorage.getItem("cms_token");
     if (token) {
       config.headers = config.headers ?? {};
-      config.headers.Authorization = ` ${token}`;
+      const value = token.startsWith("Bearer ") ? token : ` ${token}`;
+      config.headers.Authorization = value;
     }
   }
 
