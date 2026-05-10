@@ -14,7 +14,17 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ImageIcon, Plus, Loader2, Upload, FileImage, X, CheckCircle2, ChevronLeft, ChevronRight, Image
+  ImageIcon,
+  Plus,
+  Loader2,
+  Upload,
+  FileImage,
+  X,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Image,
+  Copy,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PhotoAsset } from "@/lib/types";
@@ -79,6 +89,43 @@ function simulateUpload(
     }
   }, 80);
   return () => clearInterval(interval);
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  // Prefer modern Clipboard API when available.
+  try {
+    if (
+      typeof window !== "undefined" &&
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      window.isSecureContext
+    ) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to legacy copy
+  }
+
+  // Fallback: document.execCommand('copy')
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-1000px";
+    textarea.style.left = "-1000px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 // ✅ Helper: resolve Strapi image URL
@@ -344,6 +391,16 @@ export default function Page() {
 
   const currentCarouselPhoto = photos[currentPhotoIndex] || null;
 
+  const handleCopyPublicUrl = async (url: string) => {
+    if (!url) {
+      toast.error("No public URL available for this image");
+      return;
+    }
+    const ok = await copyTextToClipboard(url);
+    if (ok) toast.success("Copied public image URL");
+    else toast.error("Could not copy URL. Please copy it manually.");
+  };
+
   // ✅ 3. Create / Update photo in Strapi
 const onSubmit: SubmitHandler<FormData> = async (data) => {
   try {
@@ -499,6 +556,16 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
                             </span>
                           </div>
                         )}
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyPublicUrl(photo.imageUrl);
+                          }}
+                          title="Copy public URL"
+                          className="absolute top-2 right-10 h-10 w-10 rounded-full bg-blue-500 backdrop-blur-md flex items-center justify-center opacity-90 transition-opacity hover:opacity-100 hover:bg-white/30"
+                        >
+                          <Copy className="h-3 w-3 text-white" />
+                        </Button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -819,6 +886,13 @@ const onSubmit: SubmitHandler<FormData> = async (data) => {
                   className="absolute right-4 cursor-pointer top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/20 backdrop-blur-md hover:bg-white/30 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
                 >
                   <ChevronRight className="h-5 w-5 text-white" />
+                </button>
+                <button
+                  onClick={() => handleCopyPublicUrl(currentCarouselPhoto.imageUrl)}
+                  title="Copy public URL"
+                  className="absolute top-4 right-14 h-8 w-8 rounded-full cursor-pointer bg-white/20 backdrop-blur-md hover:bg-white/30 flex items-center justify-center transition-all"
+                >
+                  <Copy className="h-4 w-4 text-white" />
                 </button>
                 <button
                   onClick={() => setCarouselOpen(false)}

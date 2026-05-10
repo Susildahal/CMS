@@ -1,145 +1,93 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
+
+// Components
+import { StrapiDataTable } from "@/components/datatable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
-import type { TeamMember } from "@/lib/types";
-import ImageUploader from "@/components/imageuploader";
-import { apiClient } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+// Icons
+import { Users, Plus, Loader2, User, Link as LinkIcon } from "lucide-react";
 
 const schema = z.object({
   name: z.string().min(2, "Name required"),
   role: z.string().min(2, "Role required"),
-  bio: z.string().min(10, "Bio must be at least 10 characters"),
-  imageUrl: z.string().url("Enter a valid URL").or(z.literal("")),
-  linkedIn: z.string().url("Enter a valid LinkedIn URL").or(z.literal("")),
+  bio: z.string().min(10, "Bio required"),
+  imageUrl: z.string().url("Valid URL required").or(z.literal("")),
+  linkedIn: z.string().url("Valid URL required").or(z.literal("")),
   order: z.coerce.number().min(1),
 });
 
-type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
+type FormData = z.output<typeof schema>;
 
 export default function TeamPage() {
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<TeamMember | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [mode, setMode] = useState<"add" | "edit" | "view">("view");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormInput, any, FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { order: 1, imageUrl: "" },
   });
 
-  const fetchMembers = async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get("http://localhost:1337/api/teams?sort=order&populate=imageUrl");
-      setMembers(response.data?.data || response.data);
-    } catch (error) {
-      toast.error("Failed to load team members");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ─── Table Columns ─────────────────────────────────────────────────────────
+  const columns = [
+    {
+      key: "imageUrl",
+      label: "Photo",
+      render: (url: string) => (
+        <Avatar className="h-8 w-8 border">
+          <AvatarImage src={url} className="object-cover" />
+          <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+        </Avatar>
+      ),
+    },
+    { key: "name", label: "Name" },
+    { key: "role", label: "Role" },
+    { key: "order", label: "Order" },
+  ];
 
-  useEffect(() => {
-    fetchMembers();
-  }, []);
-
-  const openNew = () => {
-    setEditing(null);
-    setImageFile(null);
-    reset({ order: members.length + 1, imageUrl: "", name: "", role: "", bio: "", linkedIn: "" });
-    setOpen(true);
-  };
-
-  const openEdit = (m: TeamMember) => {
-    setEditing(m);
-    setImageFile(null);
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+  const openForm = (data: any = null, formMode: "add" | "edit" | "view" = "add") => {
+    setMode(formMode);
+    setEditingId(data?.documentId || null);
     reset({
-      name: m.name,
-      role: m.role,
-      bio: m.bio,
-      imageUrl: m.imageUrl || "",
-      linkedIn: m.linkedIn || "",
-      order: m.order,
+      name: data?.name || "",
+      role: data?.role || "",
+      bio: data?.bio || "",
+      imageUrl: data?.imageUrl || "",
+      linkedIn: data?.linkedIn || "",
+      order: data?.order || 1,
     });
     setOpen(true);
   };
 
-const onSubmit = async (values: FormData) => {
-  try {
-    const strapiAttributes = {
-      name: values.name,
-      role: values.role,
-      bio: values.bio,
-      linkedIn: values.linkedIn || "",
-      order: Number(values.order),
-    };
-
-    const endpoint = editing
-      ? `api/teams/${editing.documentId}`
-      : "api/teams";
-
-    const method = editing ? "PUT" : "POST";
-
-    if (imageFile) {
-      const formData = new globalThis.FormData();
-      
-      // ✅ FIX: Ensure the data is stringified correctly at the root
-      formData.append("data", JSON.stringify(strapiAttributes));
-      
-      // ✅ FIX: Ensure the field name 'imageUrl' matches exactly what is in Strapi
-      formData.append("files.imageUrl", imageFile);
-
-      await apiClient({
-        method: method,
-        url: endpoint,
-        data: formData,
-        // Let axios handle headers automatically
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-    } else {
-      // Plain JSON update
-      await apiClient({
-        method: method,
-        url: endpoint,
-        data: { data: strapiAttributes },
-      });
-    }
-
-    toast.success("Team member saved!");
-    setOpen(false);
-    setImageFile(null); // Reset the local file state
-    fetchMembers();
-  } catch (error: any) {
-    console.error("Strapi Error:", error.response?.data || error);
-    toast.error(error.response?.data?.error?.message || "Failed to save");
-  }
-};
-
-  const deleteMember = async (documentId: string) => {
-    if (!confirm("Are you sure you want to delete this member?")) return;
+  const onSubmit = async (values: FormData) => {
+    if (mode === "view") return;
     try {
-      // ✅ Use documentId for Strapi v5 delete
-      await apiClient.delete(`api/teams/${documentId}`);
-      setMembers((prev) => prev.filter((m) => m.documentId !== documentId));
-      toast.success("Member removed.");
-    } catch (error) {
-      toast.error("Failed to delete member");
+      const payload = { data: values };
+      const endpoint = mode === "edit" ? `api/teams/${editingId}` : "api/teams";
+      
+      mode === "edit" 
+        ? await apiClient.put(endpoint, payload) 
+        : await apiClient.post(endpoint, payload);
+
+      toast.success(`Member ${mode === "edit" ? "updated" : "added"}!`);
+      setOpen(false);
+      setRefreshKey(p => p + 1);
+    } catch (error: any) {
+      toast.error("Failed to save data");
     }
   };
 
@@ -147,118 +95,79 @@ const onSubmit = async (values: FormData) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6 text-[#006caf]" /> Our Team
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-[#006caf]">
+            <Users className="h-6 w-6" /> Team Directory
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage team members displayed on the website.
-          </p>
         </div>
-        <Button
-          onClick={openNew}
-          className="text-white bg-gradient-to-br from-[#006caf] to-[#005a94]"
-        >
-          <Plus className="h-4 w-4 mr-1" /> Add Member
+        <Button onClick={() => openForm(null, "add")} className="bg-[#006caf] hover:bg-[#005a94]">
+          <Plus className="h-4 w-4 mr-2" /> Add Member
         </Button>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#006caf]" />
-          <p className="text-muted-foreground text-sm">Fetching team data...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {members.map((m) => (
-            <Card key={m.documentId} className="border-border hover:shadow-md transition-all group">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0 bg-gradient-to-br from-[#006caf] to-[#005a94]">
-                      {m.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">{m.name}</p>
-                      <p className="text-xs text-muted-foreground">{m.role}</p>
-                      <Badge variant="outline" className="text-[10px] mt-1">#{m.order}</Badge>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(m)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => deleteMember(m.documentId)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 leading-relaxed line-clamp-2">{m.bio}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <StrapiDataTable
+        key={refreshKey}
+        endpoint="api/teams"
+        columns={columns}
+        onView={(row) => openForm(row, "view")}
+        onEdit={(row) => openForm(row, "edit")}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Team Member" : "Add Team Member"}</DialogTitle>
+            <DialogTitle className="capitalize">
+              {mode} Team Member
+            </DialogTitle>
           </DialogHeader>
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="tm-name">Full Name *</Label>
-                <Input id="tm-name" {...register("name")} placeholder="John Doe" />
-                {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Full Name</Label>
+                <Input {...register("name")} disabled={mode === "view"} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="tm-role">Role / Title *</Label>
-                <Input id="tm-role" {...register("role")} placeholder="Lead Developer" />
-                {errors.role && <p className="text-xs text-destructive">{errors.role.message}</p>}
+              <div className="space-y-1">
+                <Label>Role</Label>
+                <Input {...register("role")} disabled={mode === "view"} />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tm-bio">Bio *</Label>
-              <Textarea id="tm-bio" {...register("bio")} placeholder="Short biography..." rows={3} />
-              {errors.bio && <p className="text-xs text-destructive">{errors.bio.message}</p>}
+
+            <div className="space-y-1">
+              <Label>Biography</Label>
+              <Textarea {...register("bio")} disabled={mode === "view"} rows={3} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Image Upload</Label>
-              <ImageUploader
-                onUpload={(files) => setImageFile(files[0] || null)}
-                maxFiles={1}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="tm-order">Display Order</Label>
-                <Input id="tm-order" type="number" {...register("order")} min={1} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="tm-li">LinkedIn URL</Label>
-                <Input id="tm-li" {...register("linkedIn")} placeholder="https://linkedin.com/..." />
-                {errors.linkedIn && <p className="text-xs text-destructive">{errors.linkedIn.message}</p>}
+
+            <div className="space-y-1">
+              <Label>Image URL (String)</Label>
+              <div className="relative">
+                <LinkIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input {...register("imageUrl")} className="pl-9" placeholder="https://..." disabled={mode === "view"} />
               </div>
             </div>
-            <div className="flex gap-2 pt-2">
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Order</Label>
+                <Input type="number" {...register("order")} disabled={mode === "view"} />
+              </div>
+              <div className="space-y-1">
+                <Label>LinkedIn</Label>
+                <Input {...register("linkedIn")} disabled={mode === "view"} />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1">
-                Cancel
+                {mode === "view" ? "Close" : "Cancel"}
               </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 text-white bg-gradient-to-br from-[#006caf] to-[#005a94]"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : editing ? "Update" : "Add Member"}
-              </Button>
-            </div>
+              
+              {/* ✅ Submit button only shows if NOT in view mode */}
+              {mode !== "view" && (
+                <Button type="submit" disabled={isSubmitting} className="flex-1 bg-[#006caf]">
+                  {isSubmitting ? <Loader2 className="animate-spin h-4 w-4" /> : "Save Changes"}
+                </Button>
+              )}
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
