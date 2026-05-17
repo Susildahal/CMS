@@ -1,251 +1,367 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
+
+// --- UI Components ---
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, Pencil, Trash2, Loader2, Search, ShieldAlert } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
-import type { User, UserRole } from "@/lib/types";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-const ROLES: UserRole[] = ["admin", "editor", "viewer"];
-const STATUSES = ["active", "inactive", "suspended"] as const;
+import {
+  Users, Plus, Loader2, Trash2, Pencil, MoreHorizontal,
+  Search, ShieldAlert, Check, X, Shield, Mail, UserCircle
+} from "lucide-react";
+import { StrapiDataTable } from "@/components/datatable";
+
+// --- Types & Schemas (Aligned with Strapi Admin Users) ---
+interface AdminRole {
+  id: number;
+  name: string;
+  description: string;
+}
+
+interface AdminUser {
+  id: number;
+  firstname: string;
+  lastname: string;
+  email: string;
+  isActive: boolean;
+  createdAt: string;
+  roles?: AdminRole[];
+}
 
 const schema = z.object({
-  name: z.string().min(2, "Name required"),
+  firstname: z.string().min(2, "First name is required"),
+  lastname: z.string().min(2, "Last name is required"),
   email: z.string().email("Valid email required"),
-  role: z.enum(["admin", "editor", "viewer"]),
-  status: z.enum(["active", "inactive", "suspended"]),
+  password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+  isActive: z.boolean(),
+  roles: z.array(z.number()).min(1, "At least one role is required"),
 });
+
 type FormData = z.infer<typeof schema>;
 
-const INITIAL: User[] = [
-  { id: "1", name: "Admin User", email: "admin@company.com", role: "admin", createdAt: "2024-01-01", status: "active" },
-  { id: "2", name: "Editor User", email: "editor@company.com", role: "editor", createdAt: "2024-03-15", status: "active" },
-  { id: "3", name: "Content Writer", email: "writer@company.com", role: "editor", createdAt: "2024-06-20", status: "active" },
-  { id: "4", name: "View Only", email: "viewer@company.com", role: "viewer", createdAt: "2024-09-01", status: "inactive" },
-];
-
-const roleColor: Record<string, { bg: string; color: string }> = {
-  admin: { bg: "#006caf18", color: "#006caf" },
-  editor: { bg: "#f9bb1918", color: "#e0a810" },
-  viewer: { bg: "#88888818", color: "#666" },
-};
-const statusColor: Record<string, { bg: string; color: string }> = {
-  active: { bg: "#22c55e18", color: "#22c55e" },
-  inactive: { bg: "#88888818", color: "#888" },
-  suspended: { bg: "#ef444418", color: "#ef4444" },
-};
-
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>(INITIAL);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<User | null>(null);
+  // ==========================================
+  // STATE
+  // ==========================================
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<AdminRole[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [roleVal, setRoleVal] = useState<UserRole>("editor");
-  const [statusVal, setStatusVal] = useState<User["status"]>("active");
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { isActive: true, roles: [] }
+  });
+
+  const isActiveValue = watch("isActive");
+
+  // ==========================================
+  // API FETCHING
+  // ==========================================
+  const fetchUsersAndRoles = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Fetch Admin Users & Admin Roles simultaneously
+      const [usersRes, rolesRes] = await Promise.all([
+        apiClient.get("/admin/users"),
+        apiClient.get("/admin/roles")
+      ]);
+
+      // Safely extract arrays from Strapi's admin responses
+      const rawUsers = usersRes.data?.data?.results || usersRes.data?.data || usersRes.data || [];
+      const rawRoles = rolesRes.data?.data?.results || rolesRes.data?.data || rolesRes.data || [];
+
+      setUsers(Array.isArray(rawUsers) ? rawUsers : []);
+      setAvailableRoles(Array.isArray(rawRoles) ? rawRoles : []);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || "Failed to load admin users");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsersAndRoles();
+  }, [fetchUsersAndRoles]);
+
+  // ==========================================
+  // HANDLERS
+  // ==========================================
   const openNew = () => {
-    if (currentUser?.role !== "admin") { toast.error("Only admins can add users."); return; }
-    setEditing(null); reset({ name: "", email: "", role: "editor", status: "active" });
-    setRoleVal("editor"); setStatusVal("active"); setOpen(true);
+    setEditingUser(null);
+    reset({ firstname: "", lastname: "", email: "", password: "", isActive: true, roles: [] });
+    setOpenDialog(true);
   };
-  const openEdit = (u: User) => {
-    if (currentUser?.role !== "admin") { toast.error("Only admins can edit users."); return; }
-    setEditing(u); reset({ name: u.name, email: u.email, role: u.role, status: u.status });
-    setRoleVal(u.role); setStatusVal(u.status); setOpen(true);
+
+  const openEdit = (u: AdminUser) => {
+    setEditingUser(u);
+    const currentRoleIds = u.roles ? u.roles.map((r) => r.id) : [];
+    reset({
+      firstname: u.firstname,
+      lastname: u.lastname,
+      email: u.email,
+      password: "", // Hide existing password
+      isActive: u.isActive,
+      roles: currentRoleIds,
+    });
+    setOpenDialog(true);
   };
 
   const onSubmit = async (data: FormData) => {
-    await new Promise((r) => setTimeout(r, 600));
-    if (editing) {
-      setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...data } : u));
-      toast.success("User updated!");
-    } else {
-      const newUser: User = { id: Date.now().toString(), ...data, createdAt: new Date().toISOString().split("T")[0] };
-      setUsers(prev => [...prev, newUser]);
-      toast.success("User created!");
+    try {
+      const payload: any = {
+        firstname: data.firstname,
+        lastname: data.lastname,
+        email: data.email,
+        isActive: data.isActive,
+        roles: data.roles,
+      }; 
+
+      if (data.password) {
+        payload.password = data.password;
+      }
+
+      if (editingUser) {
+        await apiClient.put(`/admin/users/${editingUser.id}`, payload);
+        toast.success("User updated successfully!");
+      } else {
+        if (!data.password) {
+          toast.error("Password is required for new users");
+          return;
+        }
+        await apiClient.post("/admin/users", payload);
+        toast.success("User created successfully!");
+      }
+      setOpenDialog(false);
+      fetchUsersAndRoles();
+      setRefreshKey(prev => prev + 1);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || "Failed to save user");
     }
-    setOpen(false);
   };
 
-  const deleteUser = (id: string) => {
-    if (id === currentUser?.id) { toast.error("You cannot delete your own account."); return; }
-    if (currentUser?.role !== "admin") { toast.error("Only admins can delete users."); return; }
-    setUsers(prev => prev.filter(u => u.id !== id));
-    toast.success("User removed.");
-  };
+  const safeUsers = Array.isArray(users) ? users : [];
 
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const activeCount = safeUsers.filter(u => u.isActive).length;
+  const inactiveCount = safeUsers.filter(u => !u.isActive).length;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" style={{ color: "#006caf" }} /> User Management
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">{users.length} total users · {users.filter(u => u.status === "active").length} active</p>
+  // ==========================================
+  // TABLE COLUMNS
+  // ==========================================
+  const columns = [
+    {
+      key: "userDetails",
+      label: "User Details",
+      render: (val: any, u: any) => (
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-[#006caf10] flex items-center justify-center shrink-0">
+            <UserCircle className="h-5 w-5 text-[#006caf]" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold">{u.firstname} {u.lastname}</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Mail className="h-3 w-3" /> {u.email}
+            </span>
+          </div>
         </div>
-        <Button onClick={openNew} className="text-white" style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }} id="add-user-btn">
+      )
+    },
+    {
+      key: "roles",
+      label: "Roles",
+      render: (val: any, u: any) => (
+        <div className="flex flex-wrap gap-1">
+          {u.roles && u.roles.length > 0 ? (
+            u.roles.map((r: any) => (
+              <Badge key={r.id} variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-[#006caf15] text-[#006caf] border-none font-medium gap-1">
+                <Shield className="h-3 w-3" /> {r.name}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: "isActive",
+      label: "Status",
+      render: (val: any, u: any) => (
+        u.isActive ? (
+          <Badge className="bg-green-500/10 text-green-700 hover:bg-green-500/20 border-green-200 shadow-none">Active</Badge>
+        ) : (
+          <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 shadow-none">Inactive</Badge>
+        )
+      )
+    }
+  ];
+
+  // ==========================================
+  // RENDER
+  // ==========================================
+  return (
+    <div className="space-y-6 ">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Users className="h-6 w-6 text-[#006caf]" />
+            Administrator Users
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Manage admin panel users and assign roles.
+          </p>
+        </div>
+        <Button onClick={openNew} className="text-white bg-gradient-to-br from-[#006caf] to-[#005a94]">
           <Plus className="h-4 w-4 mr-1" /> Add User
         </Button>
       </div>
 
-      {currentUser?.role !== "admin" && (
-        <div className="flex items-center gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
-          You have view-only access. Only admins can create, edit, or delete users.
+      {/* Stats Cards - Matching Roles Page Style */}
+      <div className="grid grid-cols-3 gap-3 max-w-2xl">
+        <div className="p-4 rounded-xl border bg-card space-y-1">
+          <p className="text-xs text-muted-foreground">Total Users</p>
+          <p className="text-2xl font-bold text-[#006caf]">{users.length}</p>
         </div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {ROLES.map(role => (
-          <Card key={role} className="border-border">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: roleColor[role].bg }}>
-                <Users className="h-4 w-4" style={{ color: roleColor[role].color }} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{users.filter(u => u.role === role).length}</p>
-                <p className="text-xs text-muted-foreground capitalize">{role}s</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: "#ef444418" }}>
-              <Users className="h-4 w-4" style={{ color: "#ef4444" }} />
-            </div>
-            <div>
-              <p className="text-xl font-bold">{users.filter(u => u.status !== "active").length}</p>
-              <p className="text-xs text-muted-foreground">Inactive</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="p-4 rounded-xl border bg-card space-y-1">
+          <p className="text-xs text-muted-foreground">Active Users</p>
+          <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-card space-y-1">
+          <p className="text-xs text-muted-foreground">Inactive / Suspended</p>
+          <p className="text-2xl font-bold text-red-500">{inactiveCount}</p>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          id="user-search"
-          placeholder="Search by name or email..."
-          className="pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      {/* Data Table */}
+      <div className="rounded-xl border border-border overflow-hidden bg-card p-4">
+        <StrapiDataTable 
+          key={refreshKey}
+          endpoint="/admin/users"
+          columns={columns}
+          onEdit={openEdit}
         />
       </div>
 
-      {/* Table */}
-      <Card className="border-border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((u) => {
-              const r = roleColor[u.role];
-              const s = statusColor[u.status];
-              const initials = u.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-              return (
-                <TableRow key={u.id} className="group">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs font-bold text-white" style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}>
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-sm">{u.name} {u.id === currentUser?.id && <span className="text-[10px] text-muted-foreground">(you)</span>}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium capitalize" style={{ background: r.bg, color: r.color }}>{u.role}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium capitalize" style={{ background: s.bg, color: s.color }}>{u.status}</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{u.createdAt}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(u)} id={`edit-user-${u.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteUser(u.id)} id={`delete-user-${u.id}`} disabled={u.id === currentUser?.id}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Add / Edit Dialog */}
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit User" : "Add New User"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" id="user-form">
-            <div className="space-y-1.5">
-              <Label htmlFor="user-name">Full Name *</Label>
-              <Input id="user-name" {...register("name")} placeholder="John Doe" />
-              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5 text-[#006caf]" />
+              {editingUser ? "Edit Admin User" : "Create Admin User"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="firstname">First Name *</Label>
+                <Input id="firstname" {...register("firstname")} placeholder="John" />
+                {errors.firstname && <p className="text-xs text-destructive">{errors.firstname.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lastname">Last Name *</Label>
+                <Input id="lastname" {...register("lastname")} placeholder="Doe" />
+                {errors.lastname && <p className="text-xs text-destructive">{errors.lastname.message}</p>}
+              </div>
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="user-email">Email *</Label>
-              <Input id="user-email" type="email" {...register("email")} placeholder="john@company.com" />
+              <Label htmlFor="email">Email Address *</Label>
+              <Input id="email" type="email" {...register("email")} placeholder="john@example.com" />
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Role *</Label>
-                <Select value={roleVal} onValueChange={(v) => { if (v) { setRoleVal(v as UserRole); setValue("role", v as UserRole); } }}>
-                  <SelectTrigger id="user-role"><SelectValue /></SelectTrigger>
-                  <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Status *</Label>
-                <Select value={statusVal} onValueChange={(v) => { if (v) { setStatusVal(v as User["status"]); setValue("status", v as User["status"]); } }}>
-                  <SelectTrigger id="user-status"><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password">
+                Password {editingUser ? <span className="text-muted-foreground font-normal">(leave blank to keep current)</span> : "*"}
+              </Label>
+              <Input id="password" type="password" {...register("password")} placeholder="••••••••" />
+              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1" id="cancel-user-btn">Cancel</Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1 text-white" style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }} id="save-user-btn">
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (editing ? "Update User" : "Create User")}
+
+            {/* Roles Selection */}
+            {availableRoles.length > 0 && (
+              <div className="space-y-2">
+                <Label>Assign Roles *</Label>
+                <div className="flex flex-wrap gap-2 p-3 border rounded-xl bg-card">
+                  {availableRoles.map((role) => {
+                    const selectedRoles = watch("roles") || [];
+                    const isSelected = selectedRoles.includes(role.id);
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setValue("roles", selectedRoles.filter(id => id !== role.id));
+                          } else {
+                            setValue("roles", [...selectedRoles, role.id]);
+                          }
+                        }}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${isSelected
+                          ? "bg-[#006caf] border-[#006caf] text-white"
+                          : "bg-background border-border hover:border-[#006caf]/50 text-foreground"
+                          }`}
+                      >
+                        {role.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.roles && <p className="text-xs text-destructive">{errors.roles.message}</p>}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between p-3 border rounded-xl bg-card">
+              <div className="flex flex-col gap-0.5">
+                <Label className="text-sm cursor-pointer" onClick={() => setValue("isActive", !isActiveValue)}>Active Status</Label>
+                <span className="text-xs text-muted-foreground">Allow user to log in to the admin panel.</span>
+              </div>
+              <Switch
+                checked={isActiveValue}
+                onCheckedChange={(val) => setValue("isActive", val)}
+                className="data-[state=checked]:bg-[#006caf]"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitting} className="text-white bg-[#006caf] hover:bg-[#005a94]">
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {editingUser ? "Update User" : "Create User"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Dialog */}
+ 
     </div>
   );
 }

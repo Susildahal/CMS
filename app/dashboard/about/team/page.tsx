@@ -56,6 +56,11 @@ export default function TeamPage() {
     { key: "name", label: "Name" },
     { key: "role", label: "Role" },
     { key: "order", label: "Order" },
+    { key: "bio", label: "Biography" },
+    { key: "linkedIn", label: "LinkedIn", hidden: true, hideable: true },
+    { key: "documentId", label: "Document ID", hidden: true, hideable: true },
+    { key: "createdAt", label: "Created", hidden: true, hideable: true },
+    { key: "updatedAt", label: "Updated", hidden: true, hideable: true }
   ];
 
   // ─── Handlers ──────────────────────────────────────────────────────────────

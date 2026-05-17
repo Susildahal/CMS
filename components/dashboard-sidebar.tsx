@@ -90,6 +90,8 @@ const navGroups: NavGroup[] = [
     label: "Admin",
     items: [
       { href: "/dashboard/users", label: "User Management", icon: Users },
+      { href: "/dashboard/users/roles", label: "Role Management", icon: ShieldCheck },
+      { href: "/dashboard/users/permissions", label: "Permission Management", icon: ShieldCheck },
     ],
   },
     {

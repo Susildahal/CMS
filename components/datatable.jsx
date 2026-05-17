@@ -154,7 +154,9 @@ export function StrapiDataTable(props) {
       const res = await apiClient.get(
         `${endpoint}?pagination[page]=${page}&pagination[pageSize]=${currentPageSize}&sort=${sortField}&populate=*`
       );
-      setData(res.data?.data ?? []);
+      
+      const rawData = res.data?.data?.results || res.data?.data || res.data || [];
+      setData(Array.isArray(rawData) ? rawData : []);
       setMeta(res.data?.meta ?? null);
     } catch (error) {
       toast.error("Failed to load data");
@@ -174,7 +176,8 @@ export function StrapiDataTable(props) {
     try {
       setDeleteLoading(true);
       const base = deleteEndpoint ?? endpoint;
-      await apiClient.delete(`${base}/${deleteTarget.documentId}`);
+      const id = deleteTarget.documentId ?? deleteTarget.id;
+      await apiClient.delete(`${base}/${id}`);
       toast.success("Deleted successfully.");
       setDeleteTarget(null);
       fetchData();
