@@ -80,6 +80,7 @@ import {
  * @property {number} [pageSize]
  * @property {boolean} [searchable]
  * @property {string} [sortField]
+ * @property {boolean | string} [populate] Set true/"*" to add populate, false to omit. Defaults to true for content APIs and false for /admin.
  */
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -96,8 +97,29 @@ export function StrapiDataTable(props) {
     title = "Records",
     addLabel = "Add New",
     pageSize = 10,
-    sortField = "createdAt:desc",
+    sortField,
+    populate,
   } = props;
+
+  const isAdminEndpoint = /^\/?admin\b/i.test(endpoint);
+  const isContentApiEndpoint = /^\/?api\b/i.test(endpoint);
+
+  // Reasonable defaults:
+  // - Content API supports createdAt + populate.
+  // - Admin API is stricter; avoid populate by default and sort by a safe key.
+  const effectiveSortField =
+    sortField !== undefined
+      ? sortField
+      : isAdminEndpoint
+        ? "id:desc"
+        : "createdAt:desc";
+
+  const effectivePopulate =
+    populate !== undefined
+      ? populate
+      : isAdminEndpoint
+        ? false
+        : true;
 
   const columnStorageKey = `cms:datatable:columns:${endpoint}`;
   /** @type {[any[], (next: any[]) => void]} */
@@ -151,9 +173,26 @@ export function StrapiDataTable(props) {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get(
-        `${endpoint}?pagination[page]=${page}&pagination[pageSize]=${currentPageSize}&sort=${sortField}&populate=*`
-      );
+
+      const params = new URLSearchParams();
+      params.set("pagination[page]", String(page));
+      params.set("pagination[pageSize]", String(currentPageSize));
+
+      if (effectiveSortField) {
+        params.set("sort", String(effectiveSortField));
+      }
+
+      // populate is a content-api feature; admin endpoints typically don't accept it.
+      if (effectivePopulate) {
+        const val = effectivePopulate === true ? "*" : String(effectivePopulate);
+        // Only send populate by default for content API routes.
+        if (!isAdminEndpoint) {
+          params.set("populate", val);
+        }
+      }
+
+      const sep = endpoint.includes("?") ? "&" : "?";
+      const res = await apiClient.get(`${endpoint}${sep}${params.toString()}`);
       
       const rawData = res.data?.data?.results || res.data?.data || res.data || [];
       setData(Array.isArray(rawData) ? rawData : []);
@@ -164,7 +203,7 @@ export function StrapiDataTable(props) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, page, currentPageSize, sortField]);
+  }, [endpoint, page, currentPageSize, effectiveSortField, effectivePopulate, isAdminEndpoint]);
 
   useEffect(() => {
     fetchData();

@@ -261,6 +261,8 @@ export default function UsersPage() {
           key={refreshKey}
           endpoint="/admin/users"
           columns={columns}
+          sortField="id:desc"
+          populate={false}
           onEdit={openEdit}
         />
       </div>

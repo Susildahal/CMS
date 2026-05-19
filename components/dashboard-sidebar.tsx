@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
   Building2,
@@ -25,10 +27,6 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface SidebarProps {
-  open: boolean;
-}
 
 interface NavItem {
   href: string;
@@ -102,8 +100,9 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-export default function DashboardSidebar({ open }: SidebarProps) {
+export default function DashboardSidebar() {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href;
@@ -111,66 +110,70 @@ export default function DashboardSidebar({ open }: SidebarProps) {
   };
 
   return (
-    <aside
-      className={cn(
-        "fixed inset-y-0 left-0 z-30 flex flex-col transition-all duration-300 ease-in-out",
-        "border-r border-sidebar-border",
-        open ? "w-64" : "w-0 overflow-hidden",
-      )}
-      style={{ background: "var(--sidebar)" }}
-    >
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border shrink-0">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl brand-gradient shrink-0">
-          <Building2 className="h-5 w-5 text-white" />
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      <SidebarHeader className="p-0">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 px-4 border-b border-sidebar-border shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl brand-gradient shrink-0">
+            <Building2 className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+            <span className="text-sm font-bold text-white leading-tight">IT Company</span>
+            <span className="text-[10px] text-sidebar-foreground/60 leading-tight">CMS Admin</span>
+          </div>
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-bold text-white leading-tight">IT Company</span>
-          <span className="text-[10px] text-sidebar-foreground/60 leading-tight">CMS Admin</span>
-        </div>
-      </div>
+      </SidebarHeader>
 
-      {/* Nav */}
-      <ScrollArea className="flex-1 py-3 h-[calc(100%-64px)] overflow-y-auto">
-        <nav className="flex flex-col gap-0.5 px-3">
-          {navGroups.map((group) => (
-            <div key={group.label} className="mb-3 ">
-              <p className="px-3 py-1 text-[10px] font-semibold uppercase   tracking-widest text-sidebar-foreground/40 mb-1">
-                {group.label}
-              </p>
-              {group.items.map((item) => {
-                const active = isActive(item.href, item.exact);
-                return (
-<Link
-  key={item.href}
-  href={item.href}
-  target={item.target}
-  rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
-  id={`nav-${item.href.replace(/\//g, "-").slice(1)}`}
-  className={cn(
-    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-    active
-      ? "text-white shadow-sm"
-      : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-  )}
-  style={
-    active
-      ? { background: "linear-gradient(90deg, #006caf, #005a94)" }
-      : {}
-  }
->
-  <item.icon className="h-4 w-4 shrink-0" />
-  <span className="truncate">{item.label}</span>
-  {active && <ChevronRight className="ml-auto h-3 w-3 opacity-60" />}
-</Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </ScrollArea>
-
-      {/* Bottom version */}
-    </aside>
+      <SidebarContent className="p-0">
+        {/* Nav */}
+        <ScrollArea className="flex-1 py-3">
+          <nav className="flex flex-col gap-0.5 px-3">
+            {navGroups.map((group) => (
+              <div key={group.label} className="mb-3">
+                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 mb-1 group-data-[collapsible=icon]:sr-only">
+                  {group.label}
+                </p>
+                {group.items.map((item) => {
+                  const active = isActive(item.href, item.exact);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      target={item.target}
+                      rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
+                      id={`nav-${item.href.replace(/\//g, "-").slice(1)}`}
+                      aria-label={item.label}
+                      title={item.label}
+                      onClick={() => {
+                        // Close the Sheet on mobile after navigation.
+                        if (isMobile) setOpenMobile(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                        "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2",
+                        active
+                          ? "text-white shadow-sm"
+                          : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                      )}
+                      style={
+                        active
+                          ? { background: "linear-gradient(90deg, #006caf, #005a94)" }
+                          : {}
+                      }
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
+                      {active && (
+                        <ChevronRight className="ml-auto h-3 w-3 opacity-60 group-data-[collapsible=icon]:hidden" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+        </ScrollArea>
+      </SidebarContent>
+    </Sidebar>
   );
 }

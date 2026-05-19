@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,21 +26,20 @@ import {
   User,
 } from "lucide-react";
 
-interface DashboardHeaderProps {
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
-  title?: string;
-  subtitle?: string;
-}
-
 export default function DashboardHeader({
-  sidebarOpen,
-  onToggleSidebar,
   title = "Dashboard",
   subtitle,
-}: DashboardHeaderProps) {
+}: {
+  title?: string;
+  subtitle?: string;
+}) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const { isMobile, open, openMobile, toggleSidebar } = useSidebar();
+
+  // On mobile, the sidebar lives in a Sheet (openMobile).
+  // On desktop, it's the persistent sidebar (open).
+  const sidebarIsOpen = isMobile ? openMobile : open;
 
   const initials = user?.name
     ?.split(" ")
@@ -55,11 +55,11 @@ export default function DashboardHeader({
         variant="ghost"
         size="icon"
         className="shrink-0 text-muted-foreground hover:text-foreground"
-        onClick={onToggleSidebar}
+        onClick={toggleSidebar}
         aria-label="Toggle sidebar"
         id="sidebar-toggle-btn"
       >
-        {sidebarOpen ? (
+        {sidebarIsOpen ? (
           <PanelLeftClose className="h-5 w-5" />
         ) : (
           <PanelLeftOpen className="h-5 w-5" />
