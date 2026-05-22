@@ -81,8 +81,8 @@ export default function TeamPage() {
   const onSubmit = async (values: FormData) => {
     if (mode === "view") return;
     try {
-      const payload = { data: values };
-      const endpoint = mode === "edit" ? `api/teams/${editingId}` : "api/teams";
+      const payload = values;
+      const endpoint = mode === "edit" ? `content-manager/collection-types/api::team.team/${editingId}` : "content-manager/collection-types/api::team.team";
       
       mode === "edit" 
         ? await apiClient.put(endpoint, payload) 
@@ -111,7 +111,8 @@ export default function TeamPage() {
 
       <StrapiDataTable
         key={refreshKey}
-        endpoint="api/teams"
+        endpoint="content-manager/collection-types/api::team.team"
+        populate="*"
         columns={columns}
         onView={(row) => openForm(row, "view")}
         onEdit={(row) => openForm(row, "edit")}

@@ -44,8 +44,8 @@ export default function ServicesPage() {
   const currentServiceType = watch("serviceType");
 
   useEffect(() => {
-    apiClient.get("api/service-types").then((res) => {
-      setServiceTypes(res.data?.data || []);
+    apiClient.get("content-manager/collection-types/api::service-type.service-type").then((res) => {
+      setServiceTypes(res.data?.results || res.data?.data || []);
     });
   }, []);
 
@@ -125,13 +125,11 @@ export default function ServicesPage() {
       // Also Strapi `description` is a Blocks field, so convert the editor HTML into blocks.
       const { serviceType, description, ...rest } = values;
       const payload = {
-        data: {
-          ...rest,
-          description: htmlToBlocks(description),
-          service_type: serviceType || null,
-        },
+        ...rest,
+        description: htmlToBlocks(description),
+        service_type: serviceType || null,
       };
-      const endpoint = mode === "edit" ? `api/services/${selectedId}` : "api/services";
+      const endpoint = mode === "edit" ? `content-manager/collection-types/api::service.service/${selectedId}` : "content-manager/collection-types/api::service.service";
       mode === "edit"
         ? await apiClient.put(endpoint, payload)
         : await apiClient.post(endpoint, payload);
@@ -167,7 +165,8 @@ export default function ServicesPage() {
       {/* ── Table ── */}
       <StrapiDataTable
         key={refreshKey}
-        endpoint="api/services"
+        endpoint="content-manager/collection-types/api::service.service"
+        populate="*"
         columns={columns}
         onView={(row) => handleOpenForm(row, "view")}
         onEdit={(row) => handleOpenForm(row, "edit")}

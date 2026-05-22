@@ -93,7 +93,7 @@ export default function LoginPage() {
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
               <CardDescription>
-                Sign in with your local Strapi admin account to access the dashboard
+                Sign in to your Strapi account to access the dashboard
               </CardDescription>
             </CardHeader>
             <CardContent>

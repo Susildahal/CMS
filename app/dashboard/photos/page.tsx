@@ -217,11 +217,11 @@ export default function Page() {
     try {
       setPageLoading(true);
       const res = await apiClient.get(
-        `api/photos?populate=*&sort=createdAt:desc&pagination[page]=${page}&pagination[pageSize]=${pageSize}`
+        `content-manager/collection-types/api::photo.photo?populate=*&sort=createdAt:desc&page=${page}&pageSize=${pageSize}`
       );
-      const raw = res.data?.data ?? [];
+      const raw = res.data?.results ?? res.data?.data ?? [];
       const serverPagination: StrapiPaginationMeta | null =
-        res.data?.meta?.pagination ?? null;
+        res.data?.pagination ?? res.data?.meta?.pagination ?? null;
 
       const mapped: ExtendedPhotoAsset[] = raw.map((item: any) => ({
         id: String(item.id),
@@ -348,7 +348,7 @@ export default function Page() {
       // 1) Delete uploaded media file(s) first
       if (fileIds.length > 0) {
         const results = await Promise.allSettled(
-          fileIds.map((id) => apiClient.delete(`api/upload/files/${id}`))
+          fileIds.map((id) => apiClient.delete(`upload/files/${id}`))
         );
         const failed = results.filter((r) => r.status === "rejected");
         if (failed.length > 0) {
@@ -359,7 +359,7 @@ export default function Page() {
       }
 
       // 2) Delete the photo collection entry
-      await apiClient.delete(`api/photos/${deleteTarget.documentId}`);
+      await apiClient.delete(`content-manager/collection-types/api::photo.photo/${deleteTarget.documentId}`);
 
       toast.success("Deleted successfully.");
       setDeleteOpen(false);
@@ -402,82 +402,62 @@ export default function Page() {
   };
 
   // ✅ 3. Create / Update photo in Strapi
-const onSubmit: SubmitHandler<FormData> = async (data) => {
-  try {
-    const STRAPI_BASE_URL = process.env.NEXT_PUBLIC_STRAPI_URL ?? "http://localhost:1337";
-    const token = typeof window !== "undefined"
-      ? window.localStorage.getItem("cms_token")
-      : "";
+  const onSubmit: SubmitHandler<FormData> = async (data) => {
+    try {
+      let photoId: number | null = null;
+      let photoUrl: string | null = null;
 
-    let photoId: number | null = null;
-    let photoUrl: string | null = null;
+      // ✅ Step 1: Upload image to Strapi media library first
+      if (imageFile) {
+        const imageForm = new globalThis.FormData();
+        const fileBuffer = await imageFile.arrayBuffer();
+        imageForm.append(
+          "files",
+          new Blob([fileBuffer], { type: imageFile.type }),
+          imageFile.name
+        );
 
-    // ✅ Step 1: Upload image to Strapi media library first
-    if (imageFile) {
-      const imageForm = new globalThis.FormData();
-      const fileBuffer = await imageFile.arrayBuffer();
-      imageForm.append(
-        "files",
-        new Blob([fileBuffer], { type: imageFile.type }),
-        imageFile.name
-      );
+        // For Admin dashboard, we use /upload (not /api/upload)
+        const uploadRes = await apiClient.post("/upload", imageForm);
+        
+        // uploadRes.data is usually an array of uploaded files
+        const uploadedImage = uploadRes.data;
+        if (!uploadedImage || uploadedImage.length === 0) {
+          toast.error("Image upload failed");
+          return;
+        }
 
-      const uploadRes = await fetch(`${STRAPI_BASE_URL}/api/upload`, {
-        method: "POST",
-        headers: {
-          Authorization: ` ${token}`,
-        },
-        body: imageForm,
-      });
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json();
-        toast.error(err?.error?.message ?? "Image upload failed");
-        return;
+        photoId = uploadedImage[0].id;
+        photoUrl = uploadedImage[0].url;
       }
 
-      const uploadedImage = await uploadRes.json();
-      photoId = uploadedImage[0].id;
-      photoUrl = uploadedImage[0].url;
-    }
-
-    // ✅ Step 2: Send content as plain JSON with image id reference
-    const contentPayload = {
-      data: {
+      // ✅ Step 2: Send content as plain JSON with image id reference
+      // Content Manager API doesn't require { data: ... } wrapper
+      const contentPayload = {
         type: data.imageType,
         desc: data.description,
         url: photoUrl,
         photo: photoId, // ✅ links uploaded image to the relation field
-      },
-    };
+      };
 
-    const endpoint = editing
-      ? `${STRAPI_BASE_URL}/api/photos/${editing.documentId}`
-      : `${STRAPI_BASE_URL}/api/photos`;
+      const endpoint = editing
+        ? `/content-manager/collection-types/api::photo.photo/${editing.documentId}`
+        : `/content-manager/collection-types/api::photo.photo`;
 
-    const res = await fetch(endpoint, {
-      method: editing ? "PUT" : "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `${token}`,
-      },
-      body: JSON.stringify(contentPayload),
-    });
+      if (editing) {
+        await apiClient.put(endpoint, contentPayload);
+      } else {
+        await apiClient.post(endpoint, contentPayload);
+      }
 
-    if (!res.ok) {
-      const err = await res.json();
-      toast.error(err?.error?.message ?? "Failed to save photo");
-      return;
+      toast.success(editing ? "Updated successfully!" : "Uploaded successfully!");
+      setOpen(false);
+      fetchPhotos();
+    } catch (error: any) {
+      console.error("Error:", error);
+      toast.error(error?.response?.data?.error?.message ?? "Something went wrong. Please try again.");
     }
-
-    toast.success(editing ? "Updated successfully!" : "Uploaded successfully!");
-    setOpen(false);
-    fetchPhotos();
-  } catch (error: any) {
-    console.error("Error:", error);
-    toast.error("Something went wrong. Please try again.");
-  }
-};
+  };
 
   const canAddMore = photos.length < MAX_PHOTOS;
   const totalPages = pagination?.pageCount ?? 1;

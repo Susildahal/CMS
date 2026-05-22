@@ -82,10 +82,10 @@ export default function Page() {
     if (mode === "view") return;
     
     try {
-      const payload = { data: values };
+      const payload = values;
       const endpoint = mode === "edit" 
-        ? `api/service-types/${selectedId}` 
-        : "api/service-types";
+        ? `content-manager/collection-types/api::service-type.service-type/${selectedId}` 
+        : "content-manager/collection-types/api::service-type.service-type";
       
       if (mode === "edit") {
         await apiClient.put(endpoint, payload);
@@ -102,7 +102,7 @@ export default function Page() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 ">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -124,7 +124,8 @@ export default function Page() {
       {/* The Global DataTable */}
       <StrapiDataTable
         key={refreshKey}
-        endpoint="api/service-types"
+        endpoint="content-manager/collection-types/api::service-type.service-type"
+        populate="*"
         columns={columns}
         onView={(row) => handleOpenForm(row, "view")}
         onEdit={(row) => handleOpenForm(row, "edit")}

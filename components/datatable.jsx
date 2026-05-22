@@ -117,7 +117,7 @@ export function StrapiDataTable(props) {
   const effectivePopulate =
     populate !== undefined
       ? populate
-      : isAdminEndpoint
+      : (isAdminEndpoint || isContentManagerEndpoint)
         ? false
         : true;
 
@@ -175,8 +175,15 @@ export function StrapiDataTable(props) {
       setLoading(true);
 
       const params = new URLSearchParams();
-      params.set("pagination[page]", String(page));
-      params.set("pagination[pageSize]", String(currentPageSize));
+      const isContentManager = /^\/?content-manager\b/i.test(endpoint);
+
+      if (isContentManager) {
+        params.set("page", String(page));
+        params.set("pageSize", String(currentPageSize));
+      } else {
+        params.set("pagination[page]", String(page));
+        params.set("pagination[pageSize]", String(currentPageSize));
+      }
 
       if (effectiveSortField) {
         params.set("sort", String(effectiveSortField));
@@ -193,10 +200,15 @@ export function StrapiDataTable(props) {
 
       const sep = endpoint.includes("?") ? "&" : "?";
       const res = await apiClient.get(`${endpoint}${sep}${params.toString()}`);
-      
-      const rawData = res.data?.data?.results || res.data?.data || res.data || [];
+
+      const rawData = res.data?.data?.results || res.data?.results || res.data?.data || res.data || [];
       setData(Array.isArray(rawData) ? rawData : []);
-      setMeta(res.data?.meta ?? null);
+
+      // Content Manager API returns pagination at the root level, while Content API returns it inside `meta`.
+      const rawMeta = res.data?.pagination
+        ? { pagination: res.data.pagination }
+        : res.data?.meta;
+      setMeta(rawMeta ?? null);
     } catch (error) {
       toast.error("Failed to load data");
       console.error(error);

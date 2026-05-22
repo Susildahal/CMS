@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -34,7 +35,7 @@ export default function DashboardHeader({
   subtitle?: string;
 }) {
   const { user, logout } = useAuth();
-  const pathname = usePathname();
+  const router = useRouter();
   const { isMobile, open, openMobile, toggleSidebar } = useSidebar();
 
   // On mobile, the sidebar lives in a Sheet (openMobile).
@@ -47,6 +48,12 @@ export default function DashboardHeader({
     .join("")
     .toUpperCase()
     .slice(0, 2) ?? "AD";
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+    router.refresh();
+  };
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -97,6 +104,18 @@ export default function DashboardHeader({
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#f9bb19]" />
         </Button>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden sm:inline-flex text-muted-foreground hover:text-foreground"
+          onClick={handleLogout}
+          id="header-logout-btn"
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogOut className="h-5 w-5" />
+        </Button>
+
         {/* Role badge */}
         <Badge
           variant="outline"
@@ -124,36 +143,38 @@ export default function DashboardHeader({
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>
-              <div className="flex flex-col space-y-0.5">
-                <span className="font-semibold">{user?.name}</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {user?.email}
-                </span>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem >
-              <Link href="/dashboard/profile" className="cursor-pointer" id="profile-link">
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem >
-              <Link href="/dashboard/settings" className="cursor-pointer" id="settings-link">
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive cursor-pointer"
-              onClick={logout}
-              id="logout-btn"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-0.5">
+                  <span className="font-semibold">{user?.name}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {user?.email}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Link href="/dashboard/profile" className="cursor-pointer" id="profile-link">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Link href="/dashboard/settings" className="cursor-pointer" id="settings-link">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive cursor-pointer"
+                onClick={handleLogout}
+                id="logout-btn"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -99,14 +99,10 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
 
       const isEdit = Boolean(editing);
       const response = isEdit
-        ? await apiClient.put(`/api/faqs/${editing?.documentId}`, { data: payload })
-        : await apiClient.post("/api/faqs", { data: payload });
+        ? await apiClient.put(`/content-manager/collection-types/api::faq.faq/${editing?.documentId}`, payload)
+        : await apiClient.post("/content-manager/collection-types/api::faq.faq", payload);
 
       console.log("API Response:", response.data);
-
-      if (!response.data?.data) {
-        throw new Error("Failed to save FAQ");
-      }
 
       toast.success(isEdit ? "FAQ updated!" : "FAQ added!");
       setOpen(false);
@@ -149,8 +145,9 @@ export default function FaqClient({ initialItems }: FaqClientProps) {
             <StrapiDataTable
         title="FAQs"
         addLabel="Add FAQ"
-        endpoint="api/faqs"
-        deleteEndpoint="api/faqs"
+        endpoint="content-manager/collection-types/api::faq.faq"
+        populate="*"
+        deleteEndpoint="content-manager/collection-types/api::faq.faq"
         columns={columns}
         pageSize={10}
         sortField="order:asc"

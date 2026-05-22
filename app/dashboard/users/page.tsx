@@ -13,15 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 
 import {
   Users, Plus, Loader2, Trash2, Pencil, MoreHorizontal,
@@ -33,7 +29,8 @@ import { StrapiDataTable } from "@/components/datatable";
 interface AdminRole {
   id: number;
   name: string;
-  description: string;
+  description?: string;
+  code?: string;
 }
 
 interface AdminUser {
@@ -44,14 +41,18 @@ interface AdminUser {
   isActive: boolean;
   createdAt: string;
   roles?: AdminRole[];
+  username?: string;
 }
 
 const schema = z.object({
-  firstname: z.string().min(2, "First name is required"),
-  lastname: z.string().min(2, "Last name is required"),
-  email: z.string().email("Valid email required"),
+  // Strapi admin validation expects trimmed strings.
+  firstname: z.string().trim().min(2, "First name is required"),
+  lastname: z.string().trim().min(2, "Last name is required"),
+  email: z.string().trim().email("Valid email required"),
+  // Strapi Admin API invite flow (POST /admin/users) does NOT accept password/isActive.
+  // We still keep these in the form schema because edit (PUT /admin/users/:id) supports them.
   password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
-  isActive: z.boolean(),
+  isActive: z.boolean().optional(),
   roles: z.array(z.number()).min(1, "At least one role is required"),
 });
 
@@ -64,7 +65,6 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [availableRoles, setAvailableRoles] = useState<AdminRole[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -76,7 +76,7 @@ export default function UsersPage() {
     defaultValues: { isActive: true, roles: [] }
   });
 
-  const isActiveValue = watch("isActive");
+  const isActiveValue = watch("isActive") ?? true;
 
   // ==========================================
   // API FETCHING
@@ -132,28 +132,30 @@ export default function UsersPage() {
 
   const onSubmit = async (data: FormData) => {
     try {
+      // Strapi v5 Admin API:
+      // - POST /admin/users is an invite endpoint: accepts firstname, lastname, email, roles.
+      //   Sending password/isActive causes: "this field has unspecified keys".
+      // - PUT /admin/users/:id can accept isActive and password.
       const payload: any = {
-        firstname: data.firstname,
-        lastname: data.lastname,
-        email: data.email,
-        isActive: data.isActive,
+        // Extra safety: trim again before sending (covers any future schema changes).
+        firstname: data.firstname.trim(),
+        lastname: data.lastname.trim(),
+        email: data.email.trim().toLowerCase(),
         roles: data.roles,
-      }; 
-
-      if (data.password) {
-        payload.password = data.password;
-      }
+      };
 
       if (editingUser) {
+        if (typeof data.isActive === "boolean") {
+          payload.isActive = data.isActive;
+        }
+        if (data.password) {
+          payload.password = data.password;
+        }
         await apiClient.put(`/admin/users/${editingUser.id}`, payload);
         toast.success("User updated successfully!");
       } else {
-        if (!data.password) {
-          toast.error("Password is required for new users");
-          return;
-        }
         await apiClient.post("/admin/users", payload);
-        toast.success("User created successfully!");
+        toast.success("Invite sent! The user will receive an email to finish registration.");
       }
       setOpenDialog(false);
       fetchUsersAndRoles();
@@ -216,7 +218,15 @@ export default function UsersPage() {
           <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 shadow-none">Inactive</Badge>
         )
       )
-    }
+    },
+    {
+    key:"createdAt",
+    label:"Created At",
+    hidden: true,
+     hideable: true 
+    },
+
+
   ];
 
   // ==========================================
@@ -256,7 +266,7 @@ export default function UsersPage() {
       </div>
 
       {/* Data Table */}
-      <div className="rounded-xl border border-border overflow-hidden bg-card p-4">
+      <div className="  overflow-hidden  ">
         <StrapiDataTable 
           key={refreshKey}
           endpoint="/admin/users"
@@ -274,7 +284,7 @@ export default function UsersPage() {
           <DialogHeader className="border-b pb-4">
             <DialogTitle className="flex items-center gap-2">
               <UserCircle className="h-5 w-5 text-[#006caf]" />
-              {editingUser ? "Edit Admin User" : "Create Admin User"}
+              {editingUser ? "Edit Admin User" : "Invite Admin User"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
@@ -298,13 +308,15 @@ export default function UsersPage() {
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">
-                Password {editingUser ? <span className="text-muted-foreground font-normal">(leave blank to keep current)</span> : "*"}
-              </Label>
-              <Input id="password" type="password" {...register("password")} placeholder="••••••••" />
-              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
-            </div>
+            {editingUser && (
+              <div className="space-y-1.5">
+                <Label htmlFor="password">
+                  Password <span className="text-muted-foreground font-normal">(leave blank to keep current)</span>
+                </Label>
+                <Input id="password" type="password" {...register("password")} placeholder="••••••••" />
+                {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+              </div>
+            )}
 
             {/* Roles Selection */}
             {availableRoles.length > 0 && (
@@ -320,7 +332,7 @@ export default function UsersPage() {
                         type="button"
                         onClick={() => {
                           if (isSelected) {
-                            setValue("roles", selectedRoles.filter(id => id !== role.id));
+                            setValue("roles", selectedRoles.filter((id) => id !== role.id));
                           } else {
                             setValue("roles", [...selectedRoles, role.id]);
                           }
@@ -339,23 +351,25 @@ export default function UsersPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between p-3 border rounded-xl bg-card">
-              <div className="flex flex-col gap-0.5">
-                <Label className="text-sm cursor-pointer" onClick={() => setValue("isActive", !isActiveValue)}>Active Status</Label>
-                <span className="text-xs text-muted-foreground">Allow user to log in to the admin panel.</span>
+            {editingUser && (
+              <div className="flex items-center justify-between p-3 border rounded-xl bg-card">
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-sm cursor-pointer" onClick={() => setValue("isActive", !isActiveValue)}>Active Status</Label>
+                  <span className="text-xs text-muted-foreground">Allow user to log in to the admin panel.</span>
+                </div>
+                <Switch
+                  checked={isActiveValue}
+                  onCheckedChange={(val) => setValue("isActive", val)}
+                  className="data-[state=checked]:bg-[#006caf]"
+                />
               </div>
-              <Switch
-                checked={isActiveValue}
-                onCheckedChange={(val) => setValue("isActive", val)}
-                className="data-[state=checked]:bg-[#006caf]"
-              />
-            </div>
+            )}
 
             <DialogFooter className="gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting} className="text-white bg-[#006caf] hover:bg-[#005a94]">
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                {editingUser ? "Update User" : "Create User"}
+                {editingUser ? "Update User" : "Invite User"}
               </Button>
             </DialogFooter>
           </form>

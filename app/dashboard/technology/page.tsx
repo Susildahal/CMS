@@ -96,14 +96,12 @@ export default function TechnologyListPage() {
   const onSubmit = async (values: FormData) => {
     try {
       const payload = {
-        data: {
-          title: values.title,
-          description: values.description,
-          technology: values.techStack,
-        },
+        title: values.title,
+        description: values.description,
+        technology: values.techStack,
       };
 
-      const endpoint = editing ? `api/technologies/${editing.documentId}` : "api/technologies";
+      const endpoint = editing ? `content-manager/collection-types/api::technology.technology/${editing.documentId}` : "content-manager/collection-types/api::technology.technology";
       editing ? await apiClient.put(endpoint, payload) : await apiClient.post(endpoint, payload);
 
       toast.success(editing ? "Updated successfully" : "Created successfully");
@@ -128,7 +126,8 @@ export default function TechnologyListPage() {
       {/* The Global DataTable */}
       <StrapiDataTable
         key={refreshKey}
-        endpoint="api/technologies"
+        endpoint="content-manager/collection-types/api::technology.technology"
+        populate="*"
         columns={columns}
         onEdit={handleEdit}
         pageSize={10}

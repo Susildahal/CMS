@@ -54,10 +54,10 @@ export default function ContactPage() {
     try {
       setLoading(true);
       const res = await apiClient.get(
-        `api/contacts?sort=createdAt:desc&pagination[page]=${currentPage}&pagination[pageSize]=${currentPageSize}`
+        `content-manager/collection-types/api::contact.contact?sort=createdAt:desc&page=${currentPage}&pageSize=${currentPageSize}`
       );
-      setMessages(res.data?.data ?? []);
-      setPaginationMeta(res.data?.meta?.pagination ?? null);
+      setMessages(res.data?.results ?? res.data?.data ?? []);
+      setPaginationMeta(res.data?.pagination ?? res.data?.meta?.pagination ?? null);
     } catch (error) {
       toast.error("Failed to load messages");
     } finally {
@@ -75,16 +75,14 @@ export default function ContactPage() {
       setUpdating(msg.documentId);
       await apiClient({
         method: "PUT",
-        url: `api/contacts/${msg.documentId}`,
+        url: `content-manager/collection-types/api::contact.contact/${msg.documentId}`,
         data: {
-          data: {
-            fullName: msg.fullName,
-            email: msg.email,
-            subject: msg.subject,
-            message: msg.message,
-            phoneNumber: msg.phoneNumber,
-            [field]: value,
-          },
+          fullName: msg.fullName,
+          email: msg.email,
+          subject: msg.subject,
+          message: msg.message,
+          phoneNumber: msg.phoneNumber,
+          [field]: value,
         },
       });
       const updated = { ...msg, [field]: value };
@@ -102,7 +100,7 @@ export default function ContactPage() {
     if (!deleteTarget) return;
     try {
       setDeleteLoading(true);
-      await apiClient.delete(`api/contacts/${deleteTarget.documentId}`);
+      await apiClient.delete(`content-manager/collection-types/api::contact.contact/${deleteTarget.documentId}`);
       toast.success("Message deleted.");
       if (selected?.documentId === deleteTarget.documentId) setSelected(null);
       setDeleteTarget(null);

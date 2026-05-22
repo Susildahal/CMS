@@ -48,8 +48,8 @@ export default function MissionPage() {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const response = await apiClient.get("api/site-name");
-        const fetched = response.data?.data;
+        const response = await apiClient.get("content-manager/single-types/api::site-name.site-name");
+        const fetched = response.data?.results ?? response.data?.data ?? response.data;
         if (fetched) {
           reset({
             mission: fetched.mission ?? DEFAULTS.mission,
@@ -72,13 +72,11 @@ export default function MissionPage() {
 // ── PUT ──────────────────────────────────────────────────────────────
 const onSubmit = async (formData: FormData) => {
   try {
-    await apiClient.put("api/site-name", {
-      data: {
-        mission: formData.mission,
-        vision: formData.vision,
-        values: formData.values,
-        aboutus: formData.aboutUs, // map camelCase → lowercase
-      },
+    await apiClient.put("content-manager/single-types/api::site-name.site-name", {
+      mission: formData.mission,
+      vision: formData.vision,
+      values: formData.values,
+      aboutus: formData.aboutUs, // map camelCase → lowercase
     });
     toast.success("Mission & Vision saved successfully!");
   } catch {
