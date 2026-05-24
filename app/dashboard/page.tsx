@@ -34,7 +34,7 @@ const typeColors: Record<string, string> = {
   edit: "#f9bb19",
 };
 
-export default function DashboardPage() {
+export default function Page() {
   const { user } = useAuth();
 
   return (

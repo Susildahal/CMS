@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient, extractErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,10 +31,13 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
-export default function ChangePasswordPage() {
+function ChangePasswordPageInner() {
   const [showPw, setShowPw] = useState(false);
   const [showCPw, setShowCPw] = useState(false);
   const [done, setDone] = useState(false);
+  const searchParams = useSearchParams();
+
+  const code = searchParams.get("code")?.trim() || "";
 
   const {
     register,
@@ -50,10 +55,23 @@ export default function ChangePasswordPage() {
     { label: "Symbol", ok: /[^A-Za-z0-9]/.test(pwValue) },
   ];
 
-  const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 1000));
-    setDone(true);
-    toast.success("Password changed successfully!");
+  const onSubmit = async (data: FormData) => {
+    if (!code) {
+      toast.error("Missing reset code. Please request a new password reset link.");
+      return;
+    }
+
+    try {
+      await apiClient.post("/admin/reset-password", {
+        resetPasswordToken: code,
+        password: data.password,
+      });
+
+      setDone(true);
+      toast.success("Password updated successfully!");
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Failed to update password"));
+    }
   };
 
   return (
@@ -99,6 +117,16 @@ export default function ChangePasswordPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" id="change-password-form">
+                {!code && (
+                  <div
+                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+                    role="alert"
+                    id="missing-reset-code-alert"
+                  >
+                    This reset link is missing a <span className="font-mono">code</span>. Please request a new
+                    password reset email.
+                  </div>
+                )}
                 {/* New password */}
                 <div className="space-y-2">
                   <Label htmlFor="cp-password">New Password</Label>
@@ -171,7 +199,7 @@ export default function ChangePasswordPage() {
                 <Button
                   type="submit"
                   id="change-password-submit-btn"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !code}
                   className="w-full font-semibold text-white h-11"
                   style={{ background: "linear-gradient(135deg, #006caf, #005a94)" }}
                 >
@@ -198,5 +226,32 @@ export default function ChangePasswordPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function ChangePasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+          <div className="w-full max-w-md">
+            <Card className="border-border shadow-xl">
+              <CardHeader className="space-y-1 pb-4">
+                <CardTitle className="text-2xl font-bold">Set New Password</CardTitle>
+                <CardDescription>Loading…</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Preparing reset form…
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      }
+    >
+      <ChangePasswordPageInner />
+    </Suspense>
   );
 }

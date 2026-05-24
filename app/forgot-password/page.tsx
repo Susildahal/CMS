@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient, extractErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,9 +25,17 @@ export default function ForgotPasswordPage() {
   });
 
   const onSubmit = async (data: FormData) => {
-    await new Promise((r) => setTimeout(r, 1000));
-    setSubmitted(true);
-    toast.success("Reset link sent! Check your inbox.");
+    try {
+      await apiClient.post("/admin/forgot-password", {
+        email: data.email.trim(),
+      });
+
+      // Security best practice: do not reveal whether the email exists.
+      setSubmitted(true);
+      toast.success("If that email exists, we sent a reset link. Please check your inbox.");
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Failed to send reset link"));
+    }
   };
 
   return (
