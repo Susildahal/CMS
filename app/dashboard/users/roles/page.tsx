@@ -366,7 +366,7 @@ export default function CombinedRolesPage() {
     const activeActions = activeSubject ? permissions[activeSubject] : null;
 
     return (
-      <div className="max-w-6xl mx-auto p-6 space-y-6 flex flex-col h-[calc(100vh-100px)]">
+      <div className="  space-y-6 flex flex-col h-[calc(100vh-100px)]">
         <div className="flex items-center justify-between shrink-0">
           <div>
             <Button variant="ghost" size="sm" onClick={() => setActiveRoleForPerms(null)} className="mb-2 -ml-3 text-muted-foreground">

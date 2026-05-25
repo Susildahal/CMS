@@ -103,6 +103,7 @@ export function StrapiDataTable(props) {
 
   const isAdminEndpoint = /^\/?admin\b/i.test(endpoint);
   const isContentApiEndpoint = /^\/?api\b/i.test(endpoint);
+  const isContentManagerEndpoint = /^\/?content-manager\b/i.test(endpoint);
 
   // Reasonable defaults:
   // - Content API supports createdAt + populate.

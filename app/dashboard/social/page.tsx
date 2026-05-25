@@ -1,190 +1,226 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
+import { StrapiDataTable } from "@/components/datatable";
+
+// --- UI Components ---
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Share2, Plus, Pencil, Trash2, Loader2, ExternalLink } from "lucide-react";
-import type { SocialLink } from "@/lib/types";
-import axios from "axios";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+
+// --- Icons ---
+import {
+  Share2, Plus, Loader2,
+  Globe, Link2, ImageIcon, Type
+} from "lucide-react";
+
+// --- Types & Validation Schema ---
+interface SocialMedia {
+  id: number;
+  documentId?: string;
+  name: string;
+  imageurl: string;
+  url: string;
+  createdAt: string;
+}
 
 const schema = z.object({
-  platform: z.string().min(2, "Platform required"),
-  url: z.string().url("Must be a valid URL"),
-  icon: z.string().min(1, "Icon required"),
-  order: z.coerce.number().min(1),
+  name: z.string().min(2, "Platform name is required (e.g., Facebook)"),
+  imageurl: z.string().url("Please enter a valid image URL asset path"),
+  url: z.string().url("Please enter a valid social platform link URL"),
 });
+
 type FormData = z.infer<typeof schema>;
-type FormInput = z.input<typeof schema>;
 
-const INITIAL: SocialLink[] = [];
+export default function SocialMediaPage() {
+  // ==========================================
+  // STATE MANAGEMENT
+  // ==========================================
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<SocialMedia | null>(null);
 
+  const [refreshKey, setRefreshKey] = useState(0);
 
-export default function SocialPage() {
-  const [items, setItems] = useState<SocialLink[]>(INITIAL);
-  const [loadedItems, setLoadedItems] = useState<SocialLink[]>(INITIAL);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<SocialLink | null>(null);
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", imageurl: "", url: "" }
+  });
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormInput, undefined, FormData>({ resolver: zodResolver(schema) });
+  // Base API Path pointing to your explicit collection-type structure
+  const API_PATH = "content-manager/collection-types/api::socialmedia.socialmedia";
 
-  const openNew = () => { setEditing(null); reset({ platform: "", url: "", icon: "🔗", order: items.length + 1 }); setOpen(true); };
-  const openEdit = (s: SocialLink) => { setEditing(s); reset({ platform: s.platform, url: s.url, icon: s.icon, order: s.order }); setOpen(true); };
+  // ==========================================
+  // DIALOG CONTROLLERS
+  // ==========================================
+  const openNew = () => {
+    setEditingItem(null);
+    reset({ name: "", imageurl: "", url: "" });
+    setOpenDialog(true);
+  };
 
+  const openEdit = (item: SocialMedia) => {
+    setEditingItem(item);
+    reset({
+      name: item.name,
+      imageurl: item.imageurl,
+      url: item.url,
+    });
+    setOpenDialog(true);
+  };
+
+  // ==========================================
+  // CREATE & UPDATE HANDLER
+  // ==========================================
   const onSubmit = async (data: FormData) => {
-    const next = editing
-      ? items.map((s) => (s.id === editing.id ? { ...s, ...data } : s))
-      : [...items, { id: Date.now().toString(), ...data }];
-
-    setItems(next);
-
     try {
-      await persistSocialMedia(next);
-      toast.success(editing ? "Social link updated!" : "Social link added!");
-      setOpen(false);
-    } catch (error) {
-      console.error("Error saving social links:", error);
-      toast.error("Failed to save social links");
-      setItems(loadedItems);
+      if (editingItem) {
+        // Update request targeting entity target ID
+        const targetId = editingItem.documentId ?? editingItem.id;
+        await apiClient.put(`${API_PATH}/${targetId}`, data);
+        toast.success("Platform entry updated cleanly!");
+      } else {
+        // Create request payload 
+        await apiClient.post(API_PATH, data);
+        toast.success("New platform added beautifully!");
+      }
+      setOpenDialog(false);
+      setRefreshKey((k) => k + 1);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || "Error processing data form configurations");
     }
   };
 
-  const persistSocialMedia = async (updatedItems: SocialLink[]) => {
-    const payload = updatedItems
-      .sort((a, b) => a.order - b.order)
-      .map((item) => ({ name: item.platform, url: item.url, icon: item.icon }));
-
-    await axios.patch("/api/settings", { socialmedia: payload });
-    setLoadedItems(updatedItems);
-  };
-
-  useEffect(() => {
-    const fetchSocial = async () => {
-      try {
-        const response = await axios.get("/api/settings");
-        const socialmedia = response.data?.data?.socialmedia;
-
-        if (Array.isArray(socialmedia) && socialmedia.length > 0) {
-          const mapped: SocialLink[] = socialmedia.map(
-            (item: { name: string; url: string; icon: string }, index: number) => ({
-              id: `${index + 1}`,
-              platform: item.name,
-              url: item.url,
-              icon: item.icon,
-              order: index + 1,
-            })
-          );
-
-          setItems(mapped);
-          setLoadedItems(mapped);
-        }
-      } catch (error) {
-        console.error("Error fetching social links:", error);
-      }
-    };
-
-    fetchSocial();
-  }, []);
+  const columns = [
+    {
+      key: "imageurl",
+      label: "Icon",
+      render: (url: string, row: SocialMedia) => (
+        <div className="h-8 w-8 rounded-lg border overflow-hidden bg-muted flex items-center justify-center">
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={url}
+              alt={row?.name ?? "icon"}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <Globe className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      ),
+    },
+    { key: "name", label: "Platform Name" },
+    {
+      key: "url",
+      label: "Target Redirect URL",
+      render: (value: string) =>
+        value ? (
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-[#006caf] hover:underline inline-flex items-center gap-1 max-w-sm truncate"
+          >
+            <Link2 className="h-3 w-3 shrink-0" /> {value}
+          </a>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        ),
+    },
+    { key: "documentId", label: "Document ID", hidden: true, hideable: true },
+    { key: "createdAt", label: "Created", hidden: true, hideable: true },
+    { key: "updatedAt", label: "Updated", hidden: true, hideable: true },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 ">
+      
+      {/* Header section matching style patterns */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Share2 className="h-6 w-6" style={{ color: "#006caf" }} /> Social Media & Links
+            <Share2 className="h-6 w-6 text-[#006caf]" />
+            Social Media 
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage social media profiles and external links.</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Configure integration connection links, handles, platforms and interface links.
+          </p>
         </div>
-        <Button onClick={openNew} className="text-white" style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }} id="add-social-btn">
-          <Plus className="h-4 w-4 mr-1" /> Add Link
+        <Button onClick={openNew} className="text-white bg-gradient-to-br from-[#006caf] to-[#005a94]">
+          <Plus className="h-4 w-4 mr-1" /> Add Platform
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[...items].sort((a, b) => a.order - b.order).map((item) => (
-          <Card key={item.id} className="border-border hover:shadow-md transition-all group">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="text-3xl shrink-0">{item.icon}</div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">{item.platform}</p>
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground truncate hover:underline flex items-center gap-1 mt-0.5" style={{ color: "#006caf" }}>
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{item.url.replace("https://", "")}</span>
-                </a>
-                <Badge variant="outline" className="text-[10px] mt-1.5">#{item.order}</Badge>
-              </div>
-              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(item)} id={`edit-social-${item.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-destructive"
-                  onClick={async () => {
-                    const next = items.filter((s) => s.id !== item.id).map((s, idx) => ({ ...s, order: idx + 1 }));
-                    setItems(next);
-                    try {
-                      await persistSocialMedia(next);
-                      toast.success("Deleted.");
-                    } catch (error) {
-                      console.error("Error saving social links:", error);
-                      toast.error("Failed to save social links");
-                      setItems(loadedItems);
-                    }
-                  }}
-                  id={`delete-social-${item.id}`}
-                ><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Professional Shadcn / Core Data Table UI structure */}
+      <StrapiDataTable
+        key={refreshKey}
+        endpoint={API_PATH}
+        deleteEndpoint={API_PATH}
+        columns={columns}
+        sortField="createdAt:desc"
+        onEdit={(row: any) => openEdit(row as SocialMedia)}
+      />
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Creation & Editing Overlay Dialog Sheet Modal */}
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit Social Link" : "Add Social Link"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" id="social-form">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5 col-span-2">
-                <Label htmlFor="soc-platform">Platform *</Label>
-                <Input id="soc-platform" {...register("platform")} placeholder="LinkedIn" />
-                {errors.platform && <p className="text-xs text-destructive">{errors.platform.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="soc-icon">Icon</Label>
-                <Input id="soc-icon" {...register("icon")} placeholder="💼" className="text-center text-xl" />
-              </div>
-            </div>
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-[#006caf]" />
+              {editingItem ? "Edit Integration" : "Add Integration Platform"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            
+            {/* Field: Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="soc-url">URL *</Label>
-              <Input id="soc-url" {...register("url")} placeholder="https://linkedin.com/company/..." />
+              <Label htmlFor="name" className="flex items-center gap-1.5">
+                <Type className="h-3.5 w-3.5 text-muted-foreground" /> Platform Name *
+              </Label>
+              <Input id="name" {...register("name")} placeholder="e.g., LinkedIn, Twitter" />
+              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+            </div>
+
+            {/* Field: Image URL asset */}
+            <div className="space-y-1.5">
+              <Label htmlFor="imageurl" className="flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> Icon Asset Link URL *
+              </Label>
+              <Input id="imageurl" {...register("imageurl")} placeholder="https://example.com/assets/logo.png" />
+              {errors.imageurl && <p className="text-xs text-destructive">{errors.imageurl.message}</p>}
+            </div>
+
+            {/* Field: Endpoint URL */}
+            <div className="space-y-1.5">
+              <Label htmlFor="url" className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" /> Destination Link URL *
+              </Label>
+              <Input id="url" {...register("url")} placeholder="https://instagram.com/yourbrand" />
               {errors.url && <p className="text-xs text-destructive">{errors.url.message}</p>}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="soc-order">Display Order</Label>
-              <Input id="soc-order" type="number" {...register("order")} min={1} />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1" id="cancel-social-btn">Cancel</Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 text-white"
-                style={{ background: "linear-gradient(135deg,#006caf,#005a94)" }}
-                id="save-social-btn"
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (editing ? "Update" : "Add")}
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitting} className="text-white bg-[#006caf] hover:bg-[#005a94]">
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {editingItem ? "Update Entry" : "Save Platform"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }
